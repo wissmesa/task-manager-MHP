@@ -180,7 +180,26 @@ export async function updateTaskAssignee(
   assignedTo: string | null
 ) {
   const user = await requireAuth();
-  await verifyTaskOwner(taskId, user.id);
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, departmentId: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = task.createdBy === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("You don't have permission to change the assignee");
+  }
 
   await db
     .update(tasks)
@@ -203,7 +222,26 @@ export async function updateTask(
   }
 ) {
   const user = await requireAuth();
-  await verifyTaskOwner(taskId, user.id);
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, departmentId: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = task.createdBy === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("You don't have permission to edit this task");
+  }
 
   await db
     .update(tasks)

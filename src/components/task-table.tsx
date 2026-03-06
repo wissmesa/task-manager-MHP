@@ -272,7 +272,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                   isBossOfTaskDept ||
                   isBossOfCreatorDept;
                 const canEditAssignee =
-                  task.createdBy === currentUserId && task.departmentId;
+                  (task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
                 const subs = task.departmentId
                   ? subordinatesMap[task.departmentId] ?? []
                   : [];

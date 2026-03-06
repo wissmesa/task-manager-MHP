@@ -139,6 +139,7 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const router = useRouter();
   const isOwner = currentUserId === task.createdBy;
+  const canEdit = isOwner || isBossOfDepartment;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -211,7 +212,7 @@ export function TaskDetail({
           </Link>
         </Button>
 
-        {isOwner && !editing && (
+        {canEdit && !editing && (
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             <Pencil className="mr-1 h-4 w-4" />
             Edit
