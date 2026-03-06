@@ -17,6 +17,7 @@ export const userRoleEnum = pgEnum("user_role", [
   "AGENT",
   "MHP_LORD",
   "SALES_DIRECTOR",
+  "DIRECTOR",
 ]);
 
 // ── Existing tables (read-only references) ──────────────────────────────────

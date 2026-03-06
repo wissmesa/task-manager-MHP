@@ -137,6 +137,16 @@ async function migrate() {
     ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS own_boss_approved BOOLEAN NOT NULL DEFAULT false;
   `;
 
+  console.log("Adding DIRECTOR to user_role enum...");
+  await sql`
+    ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'DIRECTOR';
+  `;
+
+  console.log("Seeding Executive department...");
+  await sql`
+    INSERT INTO tm_departments (name) VALUES ('Executive') ON CONFLICT (name) DO NOTHING;
+  `;
+
   console.log("Migration complete!");
 }
 

@@ -7,7 +7,7 @@ import { eq, desc, inArray, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSignedImageUrl } from "@/lib/s3";
 
-const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR"] as const;
+const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
 const ADMIN_EMAIL = "luis@bluepaperclip.com";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -425,7 +425,7 @@ export async function getAllActiveUsers() {
     .where(
       and(
         eq(users.isActive, true),
-        inArray(users.role, ["MHP_LORD", "SALES_DIRECTOR"])
+        inArray(users.role, ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"])
       )
     )
     .orderBy(users.fullName);

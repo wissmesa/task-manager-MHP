@@ -34,15 +34,29 @@ export async function POST(req: NextRequest) {
   let approvedAt: Date | null = null;
   let ownBossApproved = false;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const userRole = (session.user as any).role as string | undefined;
+
   const creatorDeptInfo = await db.query.userDepartment.findFirst({
     where: eq(userDepartment.userId, session.user.id),
-    with: { department: { columns: { id: true, bossId: true } } },
+    with: { department: { columns: { id: true, name: true, bossId: true } } },
   });
   const creatorDeptId = creatorDeptInfo?.departmentId ?? null;
+  const creatorDeptName = creatorDeptInfo?.department?.name ?? null;
   const isCreatorBoss = creatorDeptInfo?.department?.bossId === session.user.id;
   const isSameDept = departmentId && departmentId === creatorDeptId;
+  const isExecutive = userRole === "DIRECTOR" || creatorDeptName === "Executive";
 
-  if (isCreatorBoss) {
+  if (isExecutive) {
+    ownBossApproved = true;
+    if (!departmentId || isSameDept) {
+      approvalStatus = "approved";
+      approvedBy = session.user.id;
+      approvedAt = new Date();
+    } else {
+      approvalStatus = "pending_dept_approval";
+    }
+  } else if (isCreatorBoss) {
     ownBossApproved = true;
     if (!departmentId || isSameDept) {
       approvalStatus = "approved";
