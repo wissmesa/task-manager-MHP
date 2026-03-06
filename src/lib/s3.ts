@@ -1,19 +1,31 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const s3 = new S3Client({
-  region: process.env.AWS_REGION!,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
+let _s3: S3Client | null = null;
 
-export const BUCKET = process.env.AWS_S3_BUCKET_NAME!;
-const ENV = process.env.envionment || "development";
+function getS3() {
+  if (!_s3) {
+    _s3 = new S3Client({
+      region: process.env.AWS_REGION!,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    });
+  }
+  return _s3;
+}
+
+function getBucket() {
+  return process.env.AWS_S3_BUCKET_NAME!;
+}
+
+function getEnv() {
+  return process.env.envionment || "development";
+}
 
 export function buildS3Key(taskId: string, filename: string) {
-  return `${ENV}/task-images/${taskId}/${filename}`;
+  return `${getEnv()}/task-images/${taskId}/${filename}`;
 }
 
 export async function uploadToS3(
@@ -21,9 +33,9 @@ export async function uploadToS3(
   body: Buffer,
   contentType: string
 ) {
-  await s3.send(
+  await getS3().send(
     new PutObjectCommand({
-      Bucket: BUCKET,
+      Bucket: getBucket(),
       Key: key,
       Body: body,
       ContentType: contentType,
@@ -33,8 +45,8 @@ export async function uploadToS3(
 
 export async function getSignedImageUrl(key: string) {
   const command = new GetObjectCommand({
-    Bucket: BUCKET,
+    Bucket: getBucket(),
     Key: key,
   });
-  return getSignedUrl(s3, command, { expiresIn: 3600 });
+  return getSignedUrl(getS3(), command, { expiresIn: 3600 });
 }
