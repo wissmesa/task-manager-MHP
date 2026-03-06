@@ -30,9 +30,8 @@ export default async function TaskDetailPage({
 
   if (task.departmentId) {
     const dept = task.department;
-    const isCreator = task.createdBy === currentUserId;
-    if (dept && (dept.bossId === currentUserId || isCreator)) {
-      if (dept.bossId === currentUserId) isBossOfDepartment = true;
+    if (dept?.bossId === currentUserId) {
+      isBossOfDepartment = true;
       subordinates = await getDepartmentSubordinates(task.departmentId);
     }
   }
