@@ -1,0 +1,279 @@
+"use client";
+
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Loader2, Upload, X, ImageIcon } from "lucide-react";
+
+interface Department {
+  id: string;
+  name: string;
+  bossId: string | null;
+}
+
+interface LocalImage {
+  file: File;
+  preview: string;
+}
+
+interface TaskFormProps {
+  departments: Department[];
+  currentUserId: string;
+  subordinatesMap: Record<string, { id: string; fullName: string }[]>;
+}
+
+export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFormProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [images, setImages] = useState<LocalImage[]>([]);
+  const [priority, setPriority] = useState("medium");
+  const [departmentId, setDepartmentId] = useState("none");
+  const [assignedTo, setAssignedTo] = useState("unassigned");
+  const [dueDate, setDueDate] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const selectedDept = departments.find((d) => d.id === departmentId);
+  const isBossOfSelected = selectedDept?.bossId === currentUserId;
+  const subordinates = isBossOfSelected ? (subordinatesMap[departmentId] ?? []) : [];
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+
+    const newImages: LocalImage[] = Array.from(files).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+
+    setImages((prev) => [...prev, ...newImages]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeImage(index: number) {
+    setImages((prev) => {
+      URL.revokeObjectURL(prev[index].preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("title", (e.currentTarget.elements.namedItem("title") as HTMLInputElement).value);
+      formData.set("description", (e.currentTarget.elements.namedItem("description") as HTMLTextAreaElement).value);
+      formData.set("priority", priority);
+
+      if (departmentId && departmentId !== "none") {
+        formData.set("departmentId", departmentId);
+      }
+      if (isBossOfSelected && assignedTo && assignedTo !== "unassigned") {
+        formData.set("assignedTo", assignedTo);
+      }
+      if (dueDate) {
+        formData.set("dueDate", dueDate);
+      }
+
+      images.forEach((img) => formData.append("files", img.file));
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create task");
+      }
+
+      router.push("/tasks");
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create task");
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>New Task</CardTitle>
+        <CardDescription>
+          Fill out the form to create a new task request
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title *</Label>
+            <Input
+              id="title"
+              name="title"
+              placeholder="e.g. Fix bug in payments module"
+              required
+              maxLength={255}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              name="description"
+              placeholder="Describe in detail what needs to be done..."
+              rows={5}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssignedTo("unassigned"); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No department</SelectItem>
+                  {departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dueDate">Due Date</Label>
+              <Input
+                id="dueDate"
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {isBossOfSelected && subordinates.length > 0 && (
+            <div className="space-y-2">
+              <Label>Assign To</Label>
+              <Select value={assignedTo} onValueChange={setAssignedTo}>
+                <SelectTrigger className="w-full sm:w-[280px]">
+                  <SelectValue placeholder="Select a person..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {subordinates.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <Label>Attached Images</Label>
+            <div
+              className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 p-6 transition-colors hover:border-muted-foreground/50"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="mb-2 h-8 w-8 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Click to select images or drag them here
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+
+            {images.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                {images.map((img, i) => (
+                  <div
+                    key={i}
+                    className="group relative overflow-hidden rounded-lg border bg-muted"
+                  >
+                    <img
+                      src={img.preview}
+                      alt={img.file.name}
+                      className="aspect-square w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute top-1 right-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
+                      <p className="truncate text-xs text-white">
+                        {img.file.name}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="mr-2 h-4 w-4" />
+                  Create Task
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
