@@ -10,6 +10,11 @@ export default auth((req) => {
   }
 
   if (!isLoggedIn && !isOnLogin) {
+    const sharedAuth = req.cookies.get("shared_auth")?.value;
+    if (sharedAuth) {
+      const ssoUrl = new URL("/api/auth/sso", req.url);
+      return NextResponse.redirect(ssoUrl);
+    }
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
