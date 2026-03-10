@@ -109,7 +109,7 @@ const priorityColors: Record<string, string> = {
 };
 
 const approvalLabels: Record<string, string> = {
-  pending_approval: "Pending Boss Approval",
+  pending_approval: "Pending Coordinator Approval",
   pending_dept_approval: "Pending Dept. Approval",
   approved: "Approved",
   rejected: "Rejected",
@@ -225,7 +225,7 @@ export function TaskDetail({
           <CardContent className="flex items-center justify-between py-4">
             <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
               <ShieldCheck className="h-5 w-5" />
-              <span>This task is awaiting your approval as the creator&apos;s boss.</span>
+              <span>This task is awaiting your approval as the creator&apos;s coordinator.</span>
             </div>
             <div className="flex gap-2">
               <Button
@@ -276,7 +276,7 @@ export function TaskDetail({
           <CardContent className="flex items-center justify-between py-4">
             <div className="flex items-center gap-2 text-sm text-violet-800 dark:text-violet-300">
               <Building2 className="h-5 w-5" />
-              <span>This task was approved by the creator&apos;s boss and is awaiting your department approval.</span>
+              <span>This task was approved by the creator&apos;s coordinator and is awaiting your department approval.</span>
             </div>
             <div className="flex gap-2">
               <Button
@@ -385,12 +385,12 @@ export function TaskDetail({
                         ? approvalColors.rejected
                         : approvalColors.approved;
                   const bossLabel = task.approval === "pending_approval"
-                    ? "Boss: Pending"
+                    ? "Coordinator: Pending"
                     : task.ownBossApproved
-                      ? "Boss: Approved"
+                      ? "Coordinator: Approved"
                       : task.approval === "rejected"
-                        ? "Boss: Rejected"
-                        : "Boss: Approved";
+                        ? "Coordinator: Rejected"
+                        : "Coordinator: Approved";
                   return (
                     <Badge variant="secondary" className={bossColor}>
                       <ShieldCheck className="mr-1 h-3 w-3" />

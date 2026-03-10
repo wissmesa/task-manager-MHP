@@ -3,8 +3,9 @@ import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 import path from "path";
 import { db } from "@/db";
-import { tasks, taskImages, departments, userDepartment } from "@/db/schema";
+import { tasks, taskImages, departments, userDepartment, users } from "@/db/schema";
 import { buildS3Key, uploadToS3 } from "@/lib/s3";
+import { sendTaskCreatedEmail } from "@/lib/mail";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
@@ -109,6 +110,68 @@ export async function POST(req: NextRequest) {
     }
 
     await db.insert(taskImages).values(imageRecords);
+  }
+
+  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000";
+  const taskUrl = `${baseUrl}/tasks/${task.id}`;
+
+  const creatorName = session.user.name || session.user.email || "Someone";
+  const deptName = departmentId
+    ? (await db.query.departments.findFirst({
+        where: eq(departments.id, departmentId),
+        columns: { name: true, bossId: true },
+      }))
+    : null;
+  const dueDateFormatted = dueDateStr
+    ? new Date(dueDateStr).toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" })
+    : null;
+
+  const baseNotification = {
+    taskTitle: title.trim(),
+    taskDescription: description?.trim() || null,
+    priority: (priority as string) || "medium",
+    creatorName,
+    departmentName: deptName?.name ?? null,
+    dueDate: dueDateFormatted,
+    taskUrl,
+  };
+
+  if (approvalStatus === "pending_approval" && creatorDeptInfo?.department?.bossId) {
+    const boss = await db.query.users.findFirst({
+      where: eq(users.id, creatorDeptInfo.department.bossId),
+      columns: { email: true, fullName: true },
+    });
+    if (boss) {
+      sendTaskCreatedEmail(boss.email, boss.fullName, { ...baseNotification, reason: "approval_needed" });
+    }
+  }
+
+  if (approvalStatus === "pending_dept_approval" && departmentId) {
+    const targetDept = await db.query.departments.findFirst({
+      where: eq(departments.id, departmentId),
+      columns: { bossId: true },
+    });
+    if (targetDept?.bossId) {
+      const targetBoss = await db.query.users.findFirst({
+        where: eq(users.id, targetDept.bossId),
+        columns: { email: true, fullName: true },
+      });
+      if (targetBoss) {
+        sendTaskCreatedEmail(targetBoss.email, targetBoss.fullName, { ...baseNotification, reason: "dept_approval_needed" });
+      }
+    }
+  }
+
+  if (assignedTo && approvalStatus === "approved") {
+    const assigneeUser = await db.query.users.findFirst({
+      where: eq(users.id, assignedTo),
+      columns: { email: true, fullName: true },
+    });
+    if (assigneeUser) {
+      sendTaskCreatedEmail(assigneeUser.email, assigneeUser.fullName, { ...baseNotification, reason: "assigned" });
+    }
   }
 
   return NextResponse.json({ taskId: task.id });

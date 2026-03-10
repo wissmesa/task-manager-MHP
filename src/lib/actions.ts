@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { eq, desc, inArray, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSignedImageUrl } from "@/lib/s3";
+import { sendTaskCreatedEmail } from "@/lib/mail";
 
 const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
 const ADMIN_EMAIL = "luis@bluepaperclip.com";
@@ -100,9 +101,10 @@ export async function getSubordinatesForBossDepts() {
       },
     });
 
-    result[dept.id] = members
-      .filter((m) => m.userId !== session.user.id)
-      .map((m) => ({ id: m.user.id, fullName: m.user.fullName }));
+    result[dept.id] = members.map((m) => ({
+      id: m.user.id,
+      fullName: m.user.fullName,
+    }));
   }
 
   return result;
@@ -124,13 +126,11 @@ export async function getDepartmentSubordinates(departmentId: string) {
     },
   });
 
-  return members
-    .filter((m) => m.userId !== dept?.bossId)
-    .map((m) => ({
-      id: m.user.id,
-      fullName: m.user.fullName,
-      email: m.user.email,
-    }));
+  return members.map((m) => ({
+    id: m.user.id,
+    fullName: m.user.fullName,
+    email: m.user.email,
+  }));
 }
 
 // ── Task CRUD ───────────────────────────────────────────────────────────────
@@ -175,6 +175,46 @@ export async function updateTaskStatus(
   revalidatePath(`/tasks/${taskId}`);
 }
 
+export async function updateTaskPriority(
+  taskId: string,
+  priority: "low" | "medium" | "high" | "urgent"
+) {
+  const user = await requireAuth();
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, assignedTo: true, departmentId: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = task.createdBy === user.id || task.assignedTo === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    const creatorBossId = await getBossForUser(task.createdBy);
+    if (creatorBossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("You don't have permission to change this task's priority");
+  }
+
+  await db
+    .update(tasks)
+    .set({ priority, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
 export async function updateTaskAssignee(
   taskId: string,
   assignedTo: string | null
@@ -183,7 +223,7 @@ export async function updateTaskAssignee(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, departmentId: true },
+    columns: { createdBy: true, departmentId: true, title: true, description: true, priority: true, dueDate: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -205,6 +245,32 @@ export async function updateTaskAssignee(
     .update(tasks)
     .set({ assignedTo, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (assignedTo) {
+    const [assigneeUser, creatorUser, deptInfo] = await Promise.all([
+      db.query.users.findFirst({ where: eq(users.id, assignedTo), columns: { email: true, fullName: true } }),
+      db.query.users.findFirst({ where: eq(users.id, task.createdBy), columns: { fullName: true } }),
+      task.departmentId
+        ? db.query.departments.findFirst({ where: eq(departments.id, task.departmentId), columns: { name: true } })
+        : null,
+    ]);
+
+    if (assigneeUser) {
+      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+      sendTaskCreatedEmail(assigneeUser.email, assigneeUser.fullName, {
+        taskTitle: task.title,
+        taskDescription: task.description,
+        priority: task.priority,
+        creatorName: creatorUser?.fullName || "Someone",
+        departmentName: deptInfo?.name ?? null,
+        dueDate: task.dueDate
+          ? new Date(task.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" })
+          : null,
+        taskUrl: `${baseUrl}/tasks/${taskId}`,
+        reason: "assigned",
+      });
+    }
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -284,7 +350,7 @@ export async function approveTask(taskId: string) {
   if (task.approval === "pending_approval") {
     const creatorBossId = await getBossForUser(task.createdBy);
     if (creatorBossId !== user.id) {
-      throw new Error("Only the creator's department boss can approve at this stage");
+      throw new Error("Only the creator's department coordinator can approve at this stage");
     }
 
     const creatorDeptInfo = await getUserDepartmentInfo(task.createdBy);
@@ -319,7 +385,7 @@ export async function approveTask(taskId: string) {
       columns: { bossId: true },
     });
     if (dept?.bossId !== user.id) {
-      throw new Error("Only the target department boss can approve at this stage");
+      throw new Error("Only the target department coordinator can approve at this stage");
     }
 
     await db
@@ -351,7 +417,7 @@ export async function rejectTask(taskId: string) {
   if (task.approval === "pending_approval") {
     const creatorBossId = await getBossForUser(task.createdBy);
     if (creatorBossId !== user.id) {
-      throw new Error("Only the creator's department boss can reject at this stage");
+      throw new Error("Only the creator's department coordinator can reject at this stage");
     }
   } else if (task.approval === "pending_dept_approval") {
     if (!task.departmentId) throw new Error("Task has no target department");
@@ -360,7 +426,7 @@ export async function rejectTask(taskId: string) {
       columns: { bossId: true },
     });
     if (dept?.bossId !== user.id) {
-      throw new Error("Only the target department boss can reject at this stage");
+      throw new Error("Only the target department coordinator can reject at this stage");
     }
   } else {
     throw new Error("Task is not awaiting approval");
@@ -385,7 +451,7 @@ export async function assignTaskToUser(taskId: string, assignedTo: string) {
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { departmentId: true, approval: true },
+    columns: { departmentId: true, approval: true, title: true, description: true, priority: true, dueDate: true, createdBy: true },
   });
   if (!task) throw new Error("Task not found");
   if (task.approval !== "approved") throw new Error("Task must be approved first");
@@ -396,7 +462,7 @@ export async function assignTaskToUser(taskId: string, assignedTo: string) {
       columns: { bossId: true },
     });
     if (dept?.bossId !== user.id) {
-      throw new Error("Only the department boss can assign this task");
+      throw new Error("Only the department coordinator can assign this task");
     }
   }
 
@@ -404,6 +470,30 @@ export async function assignTaskToUser(taskId: string, assignedTo: string) {
     .update(tasks)
     .set({ assignedTo, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  const [assigneeUser, creatorUser, deptInfo] = await Promise.all([
+    db.query.users.findFirst({ where: eq(users.id, assignedTo), columns: { email: true, fullName: true } }),
+    db.query.users.findFirst({ where: eq(users.id, task.createdBy), columns: { fullName: true } }),
+    task.departmentId
+      ? db.query.departments.findFirst({ where: eq(departments.id, task.departmentId), columns: { name: true } })
+      : null,
+  ]);
+
+  if (assigneeUser) {
+    const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+    sendTaskCreatedEmail(assigneeUser.email, assigneeUser.fullName, {
+      taskTitle: task.title,
+      taskDescription: task.description,
+      priority: task.priority,
+      creatorName: creatorUser?.fullName || "Someone",
+      departmentName: deptInfo?.name ?? null,
+      dueDate: task.dueDate
+        ? new Date(task.dueDate).toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" })
+        : null,
+      taskUrl: `${baseUrl}/tasks/${taskId}`,
+      reason: "assigned",
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);

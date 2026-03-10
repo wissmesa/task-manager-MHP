@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority } from "@/lib/actions";
 import {
   Table,
   TableBody,
@@ -119,7 +119,7 @@ const BADGE_NA: ApprovalBadge = {
   color: "bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-500",
 };
 
-function deriveBossApproval(task: TaskRow): ApprovalBadge {
+function deriveCoordinatorApproval(task: TaskRow): ApprovalBadge {
   if (task.approval === "pending_approval") return BADGE_PENDING;
   if (task.ownBossApproved) return BADGE_APPROVED;
   if (task.approval === "rejected") return BADGE_REJECTED;
@@ -187,6 +187,20 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
     });
   }
 
+  function handlePriorityChange(taskId: string, newPriority: string) {
+    setSavingCell(`priority-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskPriority(taskId, newPriority as TaskRow["priority"]);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update priority:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handleAssigneeChange(taskId: string, newAssignee: string) {
     const assignedTo = newAssignee === "unassigned" ? null : newAssignee;
     setSavingCell(`assignee-${taskId}`);
@@ -245,7 +259,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
               <TableHead className="w-[20%]">Title</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Priority</TableHead>
-              <TableHead>Boss</TableHead>
+              <TableHead>Coordinator</TableHead>
               <TableHead>Dept.</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Assigned To</TableHead>
@@ -340,17 +354,51 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={priorityColors[task.priority]}
-                      >
-                        {priorityLabels[task.priority]}
-                      </Badge>
+                    <TableCell onClick={(e) => canEditStatus && e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                <Badge
+                                  variant="secondary"
+                                  className={`${priorityColors[task.priority]} hover:opacity-80 transition-opacity`}
+                                >
+                                  {priorityLabels[task.priority]}
+                                </Badge>
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              {(["low", "medium", "high", "urgent"] as const).map((p) => (
+                                <DropdownMenuItem
+                                  key={p}
+                                  onClick={() => handlePriorityChange(task.id, p)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <Badge variant="secondary" className={priorityColors[p]}>
+                                    {priorityLabels[p]}
+                                  </Badge>
+                                  {task.priority === p && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `priority-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : (
+                        <Badge
+                          variant="secondary"
+                          className={priorityColors[task.priority]}
+                        >
+                          {priorityLabels[task.priority]}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {(() => {
-                        const b = deriveBossApproval(task);
+                        const b = deriveCoordinatorApproval(task);
                         return (
                           <Badge variant="secondary" className={b.color}>
                             {b.label}

@@ -126,7 +126,7 @@ export function HierarchyManager({ users, departments, deptMap }: HierarchyManag
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Crown className="h-5 w-5" />
-            Department Bosses
+            Department Coordinators
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -134,8 +134,8 @@ export function HierarchyManager({ users, departments, deptMap }: HierarchyManag
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[30%]">Department</TableHead>
-                <TableHead>Current Boss</TableHead>
-                <TableHead className="w-[40%]">Assign Boss</TableHead>
+                <TableHead>Current Coordinator</TableHead>
+                <TableHead className="w-[40%]">Assign Coordinator</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -154,10 +154,10 @@ export function HierarchyManager({ users, departments, deptMap }: HierarchyManag
                         onValueChange={(val) => handleDeptBossChange(dept.id, val)}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select boss..." />
+                          <SelectValue placeholder="Select coordinator..." />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">No boss</SelectItem>
+                          <SelectItem value="none">No coordinator</SelectItem>
                           {getUsersInDept(dept.id).map((u) => (
                             <SelectItem key={u.id} value={u.id}>
                               {u.fullName}
@@ -207,7 +207,7 @@ export function HierarchyManager({ users, departments, deptMap }: HierarchyManag
                         {isBoss && (
                           <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                             <Crown className="mr-1 h-3 w-3" />
-                            Boss
+                            Coordinator
                           </Badge>
                         )}
                       </div>
