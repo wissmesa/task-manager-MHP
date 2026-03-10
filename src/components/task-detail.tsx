@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ import {
   Loader2,
   Pencil,
   X,
+  Trash2,
   CheckCircle2,
   XCircle,
   ShieldCheck,
@@ -143,6 +144,7 @@ export function TaskDetail({
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isApproving, startApproving] = useTransition();
   const [isAssigning, startAssigning] = useTransition();
 
@@ -200,6 +202,19 @@ export function TaskDetail({
     });
   }
 
+  async function handleDelete() {
+    if (!confirm("Are you sure you want to delete this task? This action cannot be undone.")) return;
+    setDeleting(true);
+    try {
+      await deleteTask(task.id);
+      router.push("/tasks");
+      router.refresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete task");
+      setDeleting(false);
+    }
+  }
+
   const canAssign = isBossOfDepartment && task.approval === "approved" && !task.assignedTo;
 
   return (
@@ -213,10 +228,26 @@ export function TaskDetail({
         </Button>
 
         {canEdit && !editing && (
-          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-            <Pencil className="mr-1 h-4 w-4" />
-            Edit
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Pencil className="mr-1 h-4 w-4" />
+              Edit
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-1 h-4 w-4" />
+              )}
+              Delete
+            </Button>
+          </div>
         )}
       </div>
 

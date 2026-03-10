@@ -326,6 +326,35 @@ export async function updateTask(
   revalidatePath(`/tasks/${taskId}`);
 }
 
+export async function deleteTask(taskId: string) {
+  const user = await requireAuth();
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, departmentId: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = task.createdBy === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("You don't have permission to delete this task");
+  }
+
+  await db.delete(taskImages).where(eq(taskImages.taskId, taskId));
+  await db.delete(tasks).where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+}
+
 // ── Approval ────────────────────────────────────────────────────────────────
 
 export async function getUserDepartmentInfo(userId: string) {
