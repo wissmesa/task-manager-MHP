@@ -51,6 +51,7 @@ export default async function TaskDetailPage({
           approvedAt: task.approvedAt,
           dueDate: task.dueDate,
           createdAt: task.createdAt,
+          completedAt: task.completedAt ?? null,
           updatedAt: task.updatedAt,
           createdBy: task.createdBy,
           creatorDeptId,

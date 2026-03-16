@@ -32,6 +32,7 @@ import {
   ArrowLeft,
   Calendar,
   CalendarClock,
+  CalendarCheck,
   User,
   UserCheck,
   Flag,
@@ -70,6 +71,7 @@ interface TaskData {
   approvedAt: Date | null;
   dueDate: Date | null;
   createdAt: Date;
+  completedAt: Date | null;
   updatedAt: Date;
   createdBy: string;
   creatorDeptId: string | null;
@@ -615,6 +617,19 @@ export function TaskDetail({
                 <span>
                   Due{" "}
                   {new Date(task.dueDate).toLocaleDateString("en-US", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+            )}
+            {task.completedAt && (
+              <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <CalendarCheck className="h-4 w-4" />
+                <span>
+                  Completed on{" "}
+                  {new Date(task.completedAt).toLocaleDateString("en-US", {
                     day: "2-digit",
                     month: "long",
                     year: "numeric",

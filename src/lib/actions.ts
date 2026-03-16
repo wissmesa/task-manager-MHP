@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { eq, desc, inArray, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSignedImageUrl } from "@/lib/s3";
-import { sendTaskCreatedEmail } from "@/lib/mail";
+import { sendTaskCreatedEmail, sendStatusChangeEmail } from "@/lib/mail";
 
 const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
 const ADMIN_EMAIL = "luis@bluepaperclip.com";
@@ -143,7 +143,7 @@ export async function updateTaskStatus(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, assignedTo: true, departmentId: true },
+    columns: { createdBy: true, assignedTo: true, departmentId: true, title: true, status: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -166,10 +166,39 @@ export async function updateTaskStatus(
     throw new Error("You don't have permission to change this task's status");
   }
 
+  const now = new Date();
+  const updateData: Record<string, unknown> = { status, updatedAt: now };
+
+  if (status === "completed") {
+    updateData.completedAt = now;
+  } else if (task.status === "completed") {
+    updateData.completedAt = null;
+  }
+
   await db
     .update(tasks)
-    .set({ status, updatedAt: new Date() })
+    .set(updateData)
     .where(eq(tasks.id, taskId));
+
+  if (
+    task.createdBy !== user.id &&
+    (status === "in_progress" || status === "completed" || status === "cancelled")
+  ) {
+    const [creatorUser, changerUser] = await Promise.all([
+      db.query.users.findFirst({ where: eq(users.id, task.createdBy), columns: { email: true, fullName: true } }),
+      db.query.users.findFirst({ where: eq(users.id, user.id), columns: { fullName: true } }),
+    ]);
+
+    if (creatorUser) {
+      const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+      sendStatusChangeEmail(creatorUser.email, creatorUser.fullName, {
+        taskTitle: task.title,
+        taskUrl: `${baseUrl}/tasks/${taskId}`,
+        newStatus: status,
+        changedByName: changerUser?.fullName || "Someone",
+      });
+    }
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -291,7 +320,7 @@ export async function updateTask(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, departmentId: true },
+    columns: { createdBy: true, departmentId: true, status: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -309,17 +338,26 @@ export async function updateTask(
     throw new Error("You don't have permission to edit this task");
   }
 
+  const now = new Date();
+  const updatePayload: Record<string, unknown> = {
+    title: data.title,
+    description: data.description,
+    priority: data.priority,
+    status: data.status,
+    assignedTo: data.assignedTo,
+    dueDate: data.dueDate ? new Date(data.dueDate) : null,
+    updatedAt: now,
+  };
+
+  if (data.status === "completed" && task.status !== "completed") {
+    updatePayload.completedAt = now;
+  } else if (data.status !== "completed" && task.status === "completed") {
+    updatePayload.completedAt = null;
+  }
+
   await db
     .update(tasks)
-    .set({
-      title: data.title,
-      description: data.description,
-      priority: data.priority,
-      status: data.status,
-      assignedTo: data.assignedTo,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
-      updatedAt: new Date(),
-    })
+    .set(updatePayload)
     .where(eq(tasks.id, taskId));
 
   revalidatePath("/tasks");

@@ -90,6 +90,7 @@ export const tasks = pgTable("tm_tasks", {
   ownBossApproved: boolean("own_boss_approved").default(false).notNull(),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
+  completedAt: timestamp("completed_at"),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

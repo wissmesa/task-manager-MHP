@@ -47,6 +47,7 @@ export default async function TasksPage() {
           creatorDeptId: t.creatorDeptId,
           dueDate: t.dueDate,
           createdAt: t.createdAt,
+          completedAt: t.completedAt ?? null,
           creator: t.creator ? { fullName: t.creator.fullName } : null,
           assignee: t.assignee ? { id: t.assignee.id, fullName: t.assignee.fullName } : null,
           department: t.department ? { name: t.department.name } : null,

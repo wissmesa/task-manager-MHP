@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateTaskStatus, updateTaskAssignee, updateTaskPriority } from "@/lib/actions";
@@ -47,6 +47,7 @@ type TaskRow = {
   creatorDeptId: string | null;
   dueDate: Date | null;
   createdAt: Date;
+  completedAt: Date | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -164,7 +165,19 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [personFilter, setPersonFilter] = useState("all");
   const [savingCell, setSavingCell] = useState<string | null>(null);
+
+  const people = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of tasks) {
+      if (t.creator) map.set(t.createdBy, t.creator.fullName);
+      if (t.assignee) map.set(t.assignee.id, t.assignee.fullName);
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [tasks]);
 
   function handleRowClick(taskId: string) {
     setLoadingId(taskId);
@@ -219,6 +232,11 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
   const filtered = tasks.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (personFilter !== "all") {
+      const matchesCreator = t.createdBy === personFilter;
+      const matchesAssignee = t.assignedTo === personFilter;
+      if (!matchesCreator && !matchesAssignee) return false;
+    }
     return true;
   });
 
@@ -250,6 +268,20 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
             <SelectItem value="urgent">Urgent</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={personFilter} onValueChange={setPersonFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Person" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All People</SelectItem>
+            {people.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="rounded-lg border">
@@ -264,13 +296,15 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
               <TableHead>Department</TableHead>
               <TableHead>Assigned To</TableHead>
               <TableHead>Due Date</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Completed</TableHead>
               <TableHead>Created by</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -494,6 +528,22 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                     <TableCell className="text-muted-foreground">
                       {task.dueDate
                         ? new Date(task.dueDate).toLocaleDateString("en-US", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {new Date(task.createdAt).toLocaleDateString("en-US", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {task.completedAt
+                        ? new Date(task.completedAt).toLocaleDateString("en-US", {
                             day: "2-digit",
                             month: "short",
                             year: "numeric",
