@@ -180,10 +180,7 @@ export async function updateTaskStatus(
     .set(updateData)
     .where(eq(tasks.id, taskId));
 
-  if (
-    task.createdBy !== user.id &&
-    (status === "in_progress" || status === "completed" || status === "cancelled")
-  ) {
+  if (status === "in_progress" || status === "completed" || status === "cancelled") {
     const [creatorUser, changerUser] = await Promise.all([
       db.query.users.findFirst({ where: eq(users.id, task.createdBy), columns: { email: true, fullName: true } }),
       db.query.users.findFirst({ where: eq(users.id, user.id), columns: { fullName: true } }),
@@ -191,7 +188,7 @@ export async function updateTaskStatus(
 
     if (creatorUser) {
       const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-      sendStatusChangeEmail(creatorUser.email, creatorUser.fullName, {
+      await sendStatusChangeEmail(creatorUser.email, creatorUser.fullName, {
         taskTitle: task.title,
         taskUrl: `${baseUrl}/tasks/${taskId}`,
         newStatus: status,
