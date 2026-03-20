@@ -32,7 +32,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ImageIcon, Loader2, Check } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { ImageIcon, Loader2, Check, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -166,7 +168,11 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [personFilter, setPersonFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [savingCell, setSavingCell] = useState<string | null>(null);
+
+  const PAGE_SIZE = 20;
 
   const people = useMemo(() => {
     const map = new Map<string, string>();
@@ -229,21 +235,55 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
     });
   }
 
-  const filtered = tasks.filter((t) => {
-    if (statusFilter !== "all" && t.status !== statusFilter) return false;
-    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-    if (personFilter !== "all") {
-      const matchesCreator = t.createdBy === personFilter;
-      const matchesAssignee = t.assignedTo === personFilter;
-      if (!matchesCreator && !matchesAssignee) return false;
-    }
-    return true;
-  });
+  const filtered = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    return tasks.filter((t) => {
+      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+      if (personFilter !== "all") {
+        const matchesCreator = t.createdBy === personFilter;
+        const matchesAssignee = t.assignedTo === personFilter;
+        if (!matchesCreator && !matchesAssignee) return false;
+      }
+      if (query) {
+        const titleMatch = t.title.toLowerCase().includes(query);
+        const creatorMatch = t.creator?.fullName.toLowerCase().includes(query);
+        const assigneeMatch = t.assignee?.fullName.toLowerCase().includes(query);
+        const deptMatch = t.department?.name.toLowerCase().includes(query);
+        if (!titleMatch && !creatorMatch && !assigneeMatch && !deptMatch) return false;
+      }
+      return true;
+    });
+  }, [tasks, statusFilter, priorityFilter, personFilter, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedTasks = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  function handleFilterChange<T>(setter: (v: T) => void) {
+    return (value: T) => {
+      setter(value);
+      setCurrentPage(1);
+    };
+  }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-[260px]">
+          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="pl-9"
+          />
+        </div>
+
+        <Select value={statusFilter} onValueChange={handleFilterChange(setStatusFilter)}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -256,7 +296,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
           </SelectContent>
         </Select>
 
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+        <Select value={priorityFilter} onValueChange={handleFilterChange(setPriorityFilter)}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Priority" />
           </SelectTrigger>
@@ -269,7 +309,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
           </SelectContent>
         </Select>
 
-        <Select value={personFilter} onValueChange={setPersonFilter}>
+        <Select value={personFilter} onValueChange={handleFilterChange(setPersonFilter)}>
           <SelectTrigger className="w-[200px]">
             <SelectValue placeholder="Person" />
           </SelectTrigger>
@@ -302,14 +342,14 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {paginatedTasks.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((task) => {
+              paginatedTasks.map((task) => {
                 const isBossOfTaskDept =
                   !!task.departmentId && !!subordinatesMap[task.departmentId];
                 const isBossOfCreatorDept =
@@ -574,9 +614,56 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
         </Table>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Showing {filtered.length} of {tasks.length} tasks
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          Showing {Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} tasks
+          {filtered.length !== tasks.length && ` (${tasks.length} total)`}
+        </p>
+
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage(1)}
+              disabled={safePage <= 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="px-3 text-sm text-muted-foreground">
+              {safePage} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safePage >= totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
