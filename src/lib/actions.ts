@@ -700,49 +700,68 @@ export async function getTasksForUser() {
 
   const userId = session.user.id;
 
-  const bossDepts = await db
-    .select({ id: departments.id })
-    .from(departments)
-    .where(eq(departments.bossId, userId));
-
-  const bossDeptIds = bossDepts.map((d) => d.id);
-
-  const conditions = [
-    eq(tasks.createdBy, userId),
-    eq(tasks.assignedTo, userId),
-  ];
-
   const myDept = await db.query.userDepartment.findFirst({
     where: eq(userDepartment.userId, userId),
-    columns: { departmentId: true },
-  });
-  if (myDept) {
-    conditions.push(eq(tasks.departmentId, myDept.departmentId));
-  }
-
-  if (bossDeptIds.length > 0) {
-    conditions.push(inArray(tasks.departmentId, bossDeptIds));
-
-    const subordinateUds = await db.query.userDepartment.findMany({
-      where: inArray(userDepartment.departmentId, bossDeptIds),
-      columns: { userId: true },
-    });
-    const subordinateUserIds = subordinateUds.map((ud) => ud.userId);
-    if (subordinateUserIds.length > 0) {
-      conditions.push(inArray(tasks.createdBy, subordinateUserIds));
-    }
-  }
-
-  const allTasks = await db.query.tasks.findMany({
-    where: or(...conditions),
     with: {
-      creator: true,
-      assignee: true,
-      department: true,
-      images: true,
+      department: { columns: { name: true } },
     },
-    orderBy: [desc(tasks.createdAt)],
   });
+
+  const isExecutive = myDept?.department?.name?.toLowerCase() === "executive";
+
+  let allTasks;
+
+  if (isExecutive) {
+    allTasks = await db.query.tasks.findMany({
+      with: {
+        creator: true,
+        assignee: true,
+        department: true,
+        images: true,
+      },
+      orderBy: [desc(tasks.createdAt)],
+    });
+  } else {
+    const bossDepts = await db
+      .select({ id: departments.id })
+      .from(departments)
+      .where(eq(departments.bossId, userId));
+
+    const bossDeptIds = bossDepts.map((d) => d.id);
+
+    const conditions = [
+      eq(tasks.createdBy, userId),
+      eq(tasks.assignedTo, userId),
+    ];
+
+    if (myDept) {
+      conditions.push(eq(tasks.departmentId, myDept.departmentId));
+    }
+
+    if (bossDeptIds.length > 0) {
+      conditions.push(inArray(tasks.departmentId, bossDeptIds));
+
+      const subordinateUds = await db.query.userDepartment.findMany({
+        where: inArray(userDepartment.departmentId, bossDeptIds),
+        columns: { userId: true },
+      });
+      const subordinateUserIds = subordinateUds.map((ud) => ud.userId);
+      if (subordinateUserIds.length > 0) {
+        conditions.push(inArray(tasks.createdBy, subordinateUserIds));
+      }
+    }
+
+    allTasks = await db.query.tasks.findMany({
+      where: or(...conditions),
+      with: {
+        creator: true,
+        assignee: true,
+        department: true,
+        images: true,
+      },
+      orderBy: [desc(tasks.createdAt)],
+    });
+  }
 
   const creatorIds = [...new Set(allTasks.map((t) => t.createdBy))];
   const creatorDepts =
