@@ -35,6 +35,8 @@ export async function POST(req: NextRequest) {
   let approvedAt: Date | null = null;
   let ownBossApproved = false;
 
+  const isSelfAssigned = assignedTo === session.user.id;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const userRole = (session.user as any).role as string | undefined;
 
@@ -48,7 +50,12 @@ export async function POST(req: NextRequest) {
   const isSameDept = departmentId && departmentId === creatorDeptId;
   const isExecutive = userRole === "DIRECTOR" || creatorDeptName === "Executive";
 
-  if (isExecutive) {
+  if (isSelfAssigned) {
+    approvalStatus = "approved";
+    ownBossApproved = true;
+    approvedBy = session.user.id;
+    approvedAt = new Date();
+  } else if (isExecutive) {
     ownBossApproved = true;
     if (!departmentId || isSameDept) {
       approvalStatus = "approved";
@@ -138,39 +145,41 @@ export async function POST(req: NextRequest) {
     taskUrl,
   };
 
-  if (approvalStatus === "pending_approval" && creatorDeptInfo?.department?.bossId) {
-    const boss = await db.query.users.findFirst({
-      where: eq(users.id, creatorDeptInfo.department.bossId),
-      columns: { email: true, fullName: true },
-    });
-    if (boss) {
-      sendTaskCreatedEmail(boss.email, boss.fullName, { ...baseNotification, reason: "approval_needed" });
-    }
-  }
-
-  if (approvalStatus === "pending_dept_approval" && departmentId) {
-    const targetDept = await db.query.departments.findFirst({
-      where: eq(departments.id, departmentId),
-      columns: { bossId: true },
-    });
-    if (targetDept?.bossId) {
-      const targetBoss = await db.query.users.findFirst({
-        where: eq(users.id, targetDept.bossId),
+  if (!isSelfAssigned) {
+    if (approvalStatus === "pending_approval" && creatorDeptInfo?.department?.bossId) {
+      const boss = await db.query.users.findFirst({
+        where: eq(users.id, creatorDeptInfo.department.bossId),
         columns: { email: true, fullName: true },
       });
-      if (targetBoss) {
-        sendTaskCreatedEmail(targetBoss.email, targetBoss.fullName, { ...baseNotification, reason: "dept_approval_needed" });
+      if (boss) {
+        sendTaskCreatedEmail(boss.email, boss.fullName, { ...baseNotification, reason: "approval_needed" });
       }
     }
-  }
 
-  if (assignedTo && approvalStatus === "approved") {
-    const assigneeUser = await db.query.users.findFirst({
-      where: eq(users.id, assignedTo),
-      columns: { email: true, fullName: true },
-    });
-    if (assigneeUser) {
-      sendTaskCreatedEmail(assigneeUser.email, assigneeUser.fullName, { ...baseNotification, reason: "assigned" });
+    if (approvalStatus === "pending_dept_approval" && departmentId) {
+      const targetDept = await db.query.departments.findFirst({
+        where: eq(departments.id, departmentId),
+        columns: { bossId: true },
+      });
+      if (targetDept?.bossId) {
+        const targetBoss = await db.query.users.findFirst({
+          where: eq(users.id, targetDept.bossId),
+          columns: { email: true, fullName: true },
+        });
+        if (targetBoss) {
+          sendTaskCreatedEmail(targetBoss.email, targetBoss.fullName, { ...baseNotification, reason: "dept_approval_needed" });
+        }
+      }
+    }
+
+    if (assignedTo && approvalStatus === "approved") {
+      const assigneeUser = await db.query.users.findFirst({
+        where: eq(users.id, assignedTo),
+        columns: { email: true, fullName: true },
+      });
+      if (assigneeUser) {
+        sendTaskCreatedEmail(assigneeUser.email, assigneeUser.fullName, { ...baseNotification, reason: "assigned" });
+      }
     }
   }
 

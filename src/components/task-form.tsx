@@ -86,7 +86,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       if (departmentId && departmentId !== "none") {
         formData.set("departmentId", departmentId);
       }
-      if (isBossOfSelected && assignedTo && assignedTo !== "unassigned") {
+      if (assignedTo && assignedTo !== "unassigned") {
         formData.set("assignedTo", assignedTo);
       }
       if (dueDate) {
@@ -188,24 +188,25 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
             </div>
           </div>
 
-          {isBossOfSelected && subordinates.length > 0 && (
-            <div className="space-y-2">
-              <Label>Assign To</Label>
-              <Select value={assignedTo} onValueChange={setAssignedTo}>
-                <SelectTrigger className="w-full sm:w-[280px]">
-                  <SelectValue placeholder="Select a person..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {subordinates.map((u) => (
+          <div className="space-y-2">
+            <Label>Assign To</Label>
+            <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <SelectTrigger className="w-full sm:w-[280px]">
+                <SelectValue placeholder="Select a person..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                <SelectItem value={currentUserId}>Myself</SelectItem>
+                {subordinates
+                  .filter((u) => u.id !== currentUserId)
+                  .map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.fullName}
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="space-y-3">
             <Label>Attached Images</Label>
