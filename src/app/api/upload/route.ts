@@ -119,9 +119,7 @@ export async function POST(req: NextRequest) {
     await db.insert(taskImages).values(imageRecords);
   }
 
-  const baseUrl = process.env.NEXTAUTH_URL || process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
+  const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const taskUrl = `${baseUrl}/tasks/${task.id}`;
 
   const creatorName = session.user.name || session.user.email || "Someone";
