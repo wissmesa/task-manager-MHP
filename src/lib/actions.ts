@@ -7,6 +7,11 @@ import { eq, desc, inArray, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSignedImageUrl } from "@/lib/s3";
 import { sendTaskCreatedEmail, sendStatusChangeEmail } from "@/lib/mail";
+import {
+  isDueDateWithinPriorityLimit,
+  PRIORITY_LABELS,
+  type TaskPriority,
+} from "@/lib/task-priority";
 
 const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
 const ADMIN_EMAIL = "luis@bluepaperclip.com";
@@ -203,7 +208,7 @@ export async function updateTaskStatus(
 
 export async function updateTaskPriority(
   taskId: string,
-  priority: "low" | "medium" | "high" | "urgent"
+  priority: TaskPriority
 ) {
   const user = await requireAuth();
 
@@ -234,7 +239,50 @@ export async function updateTaskPriority(
 
   await db
     .update(tasks)
-    .set({ priority, updatedAt: new Date() })
+    .set({
+      priority,
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+export async function updateTaskPlanningStage(
+  taskId: string,
+  planningStage: "draft" | "brainstorming" | "discussed" | null
+) {
+  const user = await requireAuth();
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, assignedTo: true, departmentId: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = task.createdBy === user.id || task.assignedTo === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    const creatorBossId = await getBossForUser(task.createdBy);
+    if (creatorBossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("You don't have permission to change this task's stage");
+  }
+
+  await db
+    .update(tasks)
+    .set({ planningStage, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
 
   revalidatePath("/tasks");
@@ -307,10 +355,9 @@ export async function updateTask(
   data: {
     title: string;
     description: string | null;
-    priority: "low" | "medium" | "high" | "urgent";
+    priority: TaskPriority;
     status: "pending" | "in_progress" | "completed" | "cancelled";
     assignedTo: string | null;
-    dueDate: string | null;
   }
 ) {
   const user = await requireAuth();
@@ -342,7 +389,6 @@ export async function updateTask(
     priority: data.priority,
     status: data.status,
     assignedTo: data.assignedTo,
-    dueDate: data.dueDate ? new Date(data.dueDate) : null,
     updatedAt: now,
   };
 
@@ -355,6 +401,48 @@ export async function updateTask(
   await db
     .update(tasks)
     .set(updatePayload)
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+export async function updateTaskDueDate(taskId: string, dueDateStr: string | null) {
+  const user = await requireAuth();
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { assignedTo: true, departmentId: true, priority: true, createdAt: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = task.assignedTo === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("Only the assignee or department manager can set the due date");
+  }
+
+  const dueDate = dueDateStr?.trim() ? new Date(`${dueDateStr.trim()}T12:00:00`) : null;
+
+  if (dueDate) {
+    const priority = task.priority as TaskPriority;
+    if (!isDueDateWithinPriorityLimit(dueDate, priority, task.createdAt)) {
+      const label = PRIORITY_LABELS[priority];
+      throw new Error(`Due date must be within the ${label} window (from today through the priority limit)`);
+    }
+  }
+
+  await db
+    .update(tasks)
+    .set({ dueDate, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
 
   revalidatePath("/tasks");

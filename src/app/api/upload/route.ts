@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { tasks, taskImages, departments, userDepartment, users } from "@/db/schema";
 import { buildS3Key, uploadToS3 } from "@/lib/s3";
 import { sendTaskCreatedEmail } from "@/lib/mail";
+import { isTaskPriority } from "@/lib/task-priority";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
@@ -20,11 +21,22 @@ export async function POST(req: NextRequest) {
   const priority = formData.get("priority") as string;
   const departmentId = formData.get("departmentId") as string | null;
   const assignedTo = formData.get("assignedTo") as string | null;
-  const dueDateStr = formData.get("dueDate") as string | null;
+  const planningStageRaw = formData.get("planningStage") as string | null;
   const files = formData.getAll("files") as File[];
+
+  const validPlanningStages = ["draft", "brainstorming", "discussed"] as const;
+  const planningStage = validPlanningStages.includes(
+    planningStageRaw as (typeof validPlanningStages)[number]
+  )
+    ? (planningStageRaw as (typeof validPlanningStages)[number])
+    : null;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  }
+
+  if (!priority || !isTaskPriority(priority)) {
+    return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,12 +94,13 @@ export async function POST(req: NextRequest) {
     .values({
       title: title.trim(),
       description: description?.trim() || null,
-      priority: (priority as "low" | "medium" | "high" | "urgent") || "medium",
+      priority,
       status: "pending",
       createdBy: session.user.id,
       assignedTo: approvalStatus === "approved" && assignedTo ? assignedTo : null,
       departmentId: departmentId || null,
-      dueDate: dueDateStr ? new Date(dueDateStr) : null,
+      dueDate: null,
+      planningStage,
       approval: approvalStatus,
       ownBossApproved,
       approvedBy,
@@ -129,14 +142,12 @@ export async function POST(req: NextRequest) {
         columns: { name: true, bossId: true },
       }))
     : null;
-  const dueDateFormatted = dueDateStr
-    ? new Date(dueDateStr).toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" })
-    : null;
+  const dueDateFormatted = null;
 
   const baseNotification = {
     taskTitle: title.trim(),
     taskDescription: description?.trim() || null,
-    priority: (priority as string) || "medium",
+    priority,
     creatorName,
     departmentName: deptName?.name ?? null,
     dueDate: dueDateFormatted,

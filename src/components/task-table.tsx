@@ -3,7 +3,21 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee, updateTaskPriority } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate } from "@/lib/actions";
+import {
+  TASK_PRIORITIES,
+  PRIORITY_LABELS,
+  PRIORITY_COLORS,
+  getDueDateLimits,
+  formatDateInputValue,
+  type TaskPriority,
+} from "@/lib/task-priority";
+import {
+  TASK_PLANNING_STAGES,
+  PLANNING_STAGE_LABELS,
+  PLANNING_STAGE_COLORS,
+  type TaskPlanningStage,
+} from "@/lib/task-planning";
 import {
   Table,
   TableBody,
@@ -40,7 +54,7 @@ type TaskRow = {
   id: string;
   title: string;
   status: "pending" | "in_progress" | "completed" | "cancelled";
-  priority: "low" | "medium" | "high" | "urgent";
+  priority: TaskPriority;
   approval: "pending_approval" | "pending_dept_approval" | "approved" | "rejected";
   ownBossApproved: boolean;
   createdBy: string;
@@ -50,6 +64,7 @@ type TaskRow = {
   dueDate: Date | null;
   createdAt: Date;
   completedAt: Date | null;
+  planningStage: TaskPlanningStage | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -60,7 +75,11 @@ interface TaskTableProps {
   tasks: TaskRow[];
   currentUserId: string;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
+  showStageColumn?: boolean;
 }
+
+const planningStageLabels = PLANNING_STAGE_LABELS;
+const planningStageColors = PLANNING_STAGE_COLORS;
 
 const statusLabels: Record<string, string> = {
   pending: "Pending",
@@ -76,12 +95,8 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
-const priorityLabels: Record<string, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
-};
+const priorityLabels = PRIORITY_LABELS;
+const priorityColors = PRIORITY_COLORS;
 
 function getInitials(name: string) {
   return name
@@ -91,13 +106,6 @@ function getInitials(name: string) {
     .join("")
     .toUpperCase();
 }
-
-const priorityColors: Record<string, string> = {
-  low: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  medium: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  urgent: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-};
 
 type ApprovalBadge = { label: string; color: string };
 
@@ -161,7 +169,12 @@ function deriveDeptApproval(task: TaskRow): ApprovalBadge {
   }
 }
 
-export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTableProps) {
+export function TaskTable({
+  tasks,
+  currentUserId,
+  subordinatesMap,
+  showStageColumn = false,
+}: TaskTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -220,6 +233,35 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
     });
   }
 
+  function handlePlanningStageChange(taskId: string, newStage: string) {
+    const planningStage = newStage === "none" ? null : (newStage as TaskPlanningStage);
+    setSavingCell(`stage-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskPlanningStage(taskId, planningStage);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update stage:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
+  function handleDueDateChange(taskId: string, value: string) {
+    setSavingCell(`due-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskDueDate(taskId, value || null);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update due date:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handleAssigneeChange(taskId: string, newAssignee: string) {
     const assignedTo = newAssignee === "unassigned" ? null : newAssignee;
     setSavingCell(`assignee-${taskId}`);
@@ -267,10 +309,44 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
     };
   }
 
+  function formatShortDate(date: Date) {
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "2-digit",
+    });
+  }
+
+  function PriorityBadge({
+    priority,
+    interactive,
+  }: {
+    priority: TaskPriority;
+    interactive?: boolean;
+  }) {
+    const badge = (
+      <Badge
+        variant="secondary"
+        className={`text-xs ${priorityColors[priority]} ${interactive ? "hover:opacity-80 transition-opacity" : ""}`}
+      >
+        {priority}
+      </Badge>
+    );
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {interactive ? <button className="cursor-pointer">{badge}</button> : badge}
+        </TooltipTrigger>
+        <TooltipContent>{priorityLabels[priority]}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative w-[260px]">
+        <div className="relative min-w-[200px] flex-1 max-w-md">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search tasks..."
@@ -302,10 +378,11 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="urgent">Urgent</SelectItem>
+            {TASK_PRIORITIES.map((p) => (
+              <SelectItem key={p} value={p}>
+                {PRIORITY_LABELS[p]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -324,27 +401,28 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
         </Select>
       </div>
 
-      <div className="rounded-lg border">
-        <Table>
+      <div className="rounded-lg border overflow-hidden">
+        <Table containerClassName="overflow-x-hidden" className="table-fixed w-full text-xs sm:text-sm">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[20%]">Title</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Priority</TableHead>
-              <TableHead>Coordinator</TableHead>
-              <TableHead>Dept.</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Assigned To</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Completed</TableHead>
-              <TableHead>Created by</TableHead>
+              <TableHead className={showStageColumn ? "w-[24%]" : "w-[31%]"}>Title</TableHead>
+              {showStageColumn && <TableHead className="w-[7%]">Stage</TableHead>}
+              <TableHead className="w-[8%]">Status</TableHead>
+              <TableHead className="w-[5%]">Pri.</TableHead>
+              <TableHead className="w-[7%]">Coord.</TableHead>
+              <TableHead className="w-[7%]">Dept.</TableHead>
+              <TableHead className="w-[10%]">Department</TableHead>
+              <TableHead className="w-[5%]">Assignee</TableHead>
+              <TableHead className="w-[7%]">Due</TableHead>
+              <TableHead className="w-[7%]">Created</TableHead>
+              <TableHead className="w-[7%]">Done</TableHead>
+              <TableHead className="w-[5%]">By</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={showStageColumn ? 12 : 11} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -361,6 +439,8 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                   isBossOfCreatorDept;
                 const canEditAssignee =
                   (task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
+                const canEditDueDate =
+                  task.assignedTo === currentUserId || isBossOfTaskDept;
                 const subs = task.departmentId
                   ? subordinatesMap[task.departmentId] ?? []
                   : [];
@@ -371,21 +451,83 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleRowClick(task.id)}
                   >
-                    <TableCell>
+                    <TableCell className="max-w-0 px-2">
                       <Link
                         href={`/tasks/${task.id}`}
                         onClick={(e) => e.preventDefault()}
-                        className="flex items-center gap-2 font-medium hover:underline"
+                        className="flex min-w-0 items-center gap-1.5 font-medium hover:underline"
                       >
                         {isPending && loadingId === task.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
                         ) : null}
-                        {task.title}
+                        <span className="truncate">{task.title}</span>
                         {task.images.length > 0 && (
-                          <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
                         )}
                       </Link>
                     </TableCell>
+                    {showStageColumn && (
+                    <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                {task.planningStage ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className={`text-xs ${planningStageColors[task.planningStage]} hover:opacity-80 transition-opacity`}
+                                  >
+                                    {planningStageLabels[task.planningStage]}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground hover:opacity-80 transition-opacity"
+                                  >
+                                    Standard
+                                  </Badge>
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => handlePlanningStageChange(task.id, "none")}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="text-muted-foreground">Standard task</span>
+                                {!task.planningStage && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                              {TASK_PLANNING_STAGES.map((stage) => (
+                                <DropdownMenuItem
+                                  key={stage}
+                                  onClick={() => handlePlanningStageChange(task.id, stage)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <Badge variant="secondary" className={planningStageColors[stage]}>
+                                    {planningStageLabels[stage]}
+                                  </Badge>
+                                  {task.planningStage === stage && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `stage-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.planningStage ? (
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs ${planningStageColors[task.planningStage]}`}
+                        >
+                          {planningStageLabels[task.planningStage]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">Standard</span>
+                      )}
+                    </TableCell>
+                    )}
                     <TableCell onClick={(e) => canEditStatus && e.stopPropagation()}>
                       {canEditStatus ? (
                         <div className="flex items-center gap-1">
@@ -394,7 +536,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                               <button className="cursor-pointer">
                                 <Badge
                                   variant="secondary"
-                                  className={`${statusColors[task.status]} hover:opacity-80 transition-opacity`}
+                                  className={`text-xs ${statusColors[task.status]} hover:opacity-80 transition-opacity`}
                                 >
                                   {statusLabels[task.status]}
                                 </Badge>
@@ -422,13 +564,13 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                       ) : (
                         <Badge
                           variant="secondary"
-                          className={statusColors[task.status]}
+                          className={`text-xs ${statusColors[task.status]}`}
                         >
                           {statusLabels[task.status]}
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell onClick={(e) => canEditStatus && e.stopPropagation()}>
+                    <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
                       {canEditStatus ? (
                         <div className="flex items-center gap-1">
                           <DropdownMenu>
@@ -436,14 +578,14 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                               <button className="cursor-pointer">
                                 <Badge
                                   variant="secondary"
-                                  className={`${priorityColors[task.priority]} hover:opacity-80 transition-opacity`}
+                                  className={`text-xs ${priorityColors[task.priority]} hover:opacity-80 transition-opacity`}
                                 >
-                                  {priorityLabels[task.priority]}
+                                  {task.priority}
                                 </Badge>
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start">
-                              {(["low", "medium", "high", "urgent"] as const).map((p) => (
+                              {TASK_PRIORITIES.map((p) => (
                                 <DropdownMenuItem
                                   key={p}
                                   onClick={() => handlePriorityChange(task.id, p)}
@@ -462,38 +604,33 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                           )}
                         </div>
                       ) : (
-                        <Badge
-                          variant="secondary"
-                          className={priorityColors[task.priority]}
-                        >
-                          {priorityLabels[task.priority]}
-                        </Badge>
+                        <PriorityBadge priority={task.priority} />
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="px-1.5">
                       {(() => {
                         const b = deriveCoordinatorApproval(task);
                         return (
-                          <Badge variant="secondary" className={b.color}>
+                          <Badge variant="secondary" className={`text-xs ${b.color}`}>
                             {b.label}
                           </Badge>
                         );
                       })()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="px-1.5">
                       {(() => {
                         const b = deriveDeptApproval(task);
                         return (
-                          <Badge variant="secondary" className={b.color}>
+                          <Badge variant="secondary" className={`text-xs ${b.color}`}>
                             {b.label}
                           </Badge>
                         );
                       })()}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
+                    <TableCell className="max-w-0 truncate px-1.5 text-muted-foreground">
                       {task.department?.name ?? "—"}
                     </TableCell>
-                    <TableCell onClick={(e) => canEditAssignee && e.stopPropagation()}>
+                    <TableCell className="px-1.5" onClick={(e) => canEditAssignee && e.stopPropagation()}>
                       {canEditAssignee && subs.length > 0 ? (
                         <div className="flex items-center gap-1">
                           <DropdownMenu>
@@ -502,7 +639,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                                 <button className="cursor-pointer">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Avatar className="h-8 w-8 hover:ring-2 hover:ring-primary/50 transition-all">
+                                      <Avatar className="h-7 w-7 hover:ring-2 hover:ring-primary/50 transition-all">
                                         <AvatarFallback className="text-xs">
                                           {getInitials(task.assignee.fullName)}
                                         </AvatarFallback>
@@ -513,7 +650,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                                 </button>
                               ) : (
                                 <button className="cursor-pointer">
-                                  <Avatar className="h-8 w-8 hover:ring-2 hover:ring-primary/50 transition-all border-2 border-dashed border-muted-foreground/30">
+                                  <Avatar className="h-7 w-7 hover:ring-2 hover:ring-primary/50 transition-all border-2 border-dashed border-muted-foreground/30">
                                     <AvatarFallback className="text-xs text-muted-foreground">?</AvatarFallback>
                                   </Avatar>
                                 </button>
@@ -553,7 +690,7 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                       ) : task.assignee ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Avatar className="h-8 w-8 cursor-default">
+                            <Avatar className="h-7 w-7 cursor-default">
                               <AvatarFallback className="text-xs">
                                 {getInitials(task.assignee.fullName)}
                               </AvatarFallback>
@@ -565,37 +702,59 @@ export function TaskTable({ tasks, currentUserId, subordinatesMap }: TaskTablePr
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {task.dueDate
-                        ? new Date(task.dueDate).toLocaleDateString("en-US", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "—"}
+                    <TableCell
+                      className="whitespace-nowrap px-1.5 text-muted-foreground"
+                      onClick={(e) => canEditDueDate && e.stopPropagation()}
+                    >
+                      {canEditDueDate ? (
+                        (() => {
+                          const { min, max } = getDueDateLimits(task.priority, task.createdAt);
+                          const minStr = formatDateInputValue(min);
+                          const maxStr = max ? formatDateInputValue(max) : undefined;
+                          const windowExpired = max !== null && max < min;
+
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="date"
+                                defaultValue={task.dueDate ? formatDateInputValue(new Date(task.dueDate)) : ""}
+                                min={minStr}
+                                max={maxStr}
+                                disabled={windowExpired}
+                                title={
+                                  windowExpired
+                                    ? "Due date window expired for this priority"
+                                    : maxStr
+                                      ? `Max: ${maxStr}`
+                                      : "No max limit (P3)"
+                                }
+                                onChange={(e) => handleDueDateChange(task.id, e.target.value)}
+                                className="h-7 w-[7.5rem] px-1.5 text-xs"
+                              />
+                              {savingCell === `due-${task.id}` && (
+                                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                              )}
+                            </div>
+                          );
+                        })()
+                      ) : task.dueDate ? (
+                        formatShortDate(task.dueDate)
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {new Date(task.createdAt).toLocaleDateString("en-US", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
+                    <TableCell className="whitespace-nowrap px-1.5 text-muted-foreground">
+                      {formatShortDate(task.createdAt)}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {task.completedAt
-                        ? new Date(task.completedAt).toLocaleDateString("en-US", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "—"}
+                    <TableCell className="whitespace-nowrap px-1.5 text-muted-foreground">
+                      {task.completedAt ? formatShortDate(task.completedAt) : "—"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="px-1.5">
                       {task.creator ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Avatar className="h-8 w-8 cursor-default">
-                              <AvatarFallback className="text-xs">
+                            <Avatar className="h-7 w-7 cursor-default">
+                              <AvatarFallback className="text-[10px]">
                                 {getInitials(task.creator.fullName)}
                               </AvatarFallback>
                             </Avatar>

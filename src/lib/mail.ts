@@ -1,4 +1,5 @@
 import sgMail from "@sendgrid/mail";
+import { PRIORITY_EMOJI, PRIORITY_LABELS, type TaskPriority } from "@/lib/task-priority";
 
 let _initialized = false;
 
@@ -17,20 +18,13 @@ type StatusChangeType = "in_progress" | "completed" | "cancelled";
 interface TaskNotificationData {
   taskTitle: string;
   taskDescription: string | null;
-  priority: string;
+  priority: TaskPriority;
   creatorName: string;
   departmentName: string | null;
   dueDate: string | null;
   taskUrl: string;
   reason: EmailReason;
 }
-
-const priorityEmoji: Record<string, string> = {
-  low: "🟢",
-  medium: "🔵",
-  high: "🟠",
-  urgent: "🔴",
-};
 
 export async function sendTaskCreatedEmail(
   recipientEmail: string,
@@ -44,7 +38,8 @@ export async function sendTaskCreatedEmail(
 
   init();
 
-  const emoji = priorityEmoji[data.priority] || "⚪";
+  const emoji = PRIORITY_EMOJI[data.priority] || "⚪";
+  const priorityLabel = PRIORITY_LABELS[data.priority] || data.priority;
 
   const subjectByReason: Record<EmailReason, string> = {
     assigned: `${emoji} Task Assigned: ${data.taskTitle}`,
@@ -82,7 +77,7 @@ export async function sendTaskCreatedEmail(
             </tr>
             <tr>
               <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Priority</td>
-              <td style="padding: 8px 0; color: #1e293b;">${emoji} ${data.priority.charAt(0).toUpperCase() + data.priority.slice(1)}</td>
+              <td style="padding: 8px 0; color: #1e293b;">${emoji} ${priorityLabel}</td>
             </tr>
             <tr>
               <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Created by</td>

@@ -1,4 +1,31 @@
 import { neon } from "@neondatabase/serverless";
+import { readFileSync, existsSync } from "fs";
+import { resolve } from "path";
+
+function loadEnvFiles() {
+  for (const file of [".env.local", ".env"]) {
+    const path = resolve(process.cwd(), file);
+    if (!existsSync(path)) continue;
+    const content = readFileSync(path, "utf8");
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let value = trimmed.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!process.env[key]) process.env[key] = value;
+    }
+  }
+}
+
+loadEnvFiles();
 
 const DATABASE_URL = process.env.DATABASE_URL!;
 
@@ -23,7 +50,7 @@ async function migrate() {
   console.log("Creating tm_task_priority enum...");
   await sql`
     DO $$ BEGIN
-      CREATE TYPE tm_task_priority AS ENUM ('low', 'medium', 'high', 'urgent');
+      CREATE TYPE tm_task_priority AS ENUM ('P0', 'P1', 'P2', 'P3');
     EXCEPTION
       WHEN duplicate_object THEN null;
     END $$;
@@ -36,7 +63,7 @@ async function migrate() {
       title VARCHAR(255) NOT NULL,
       description TEXT,
       status tm_task_status NOT NULL DEFAULT 'pending',
-      priority tm_task_priority NOT NULL DEFAULT 'medium',
+      priority tm_task_priority NOT NULL DEFAULT 'P2',
       created_by VARCHAR NOT NULL REFERENCES users(id),
       assigned_to VARCHAR REFERENCES users(id),
       tenant_id VARCHAR REFERENCES tenants(id),
@@ -145,6 +172,50 @@ async function migrate() {
   console.log("Seeding Executive department...");
   await sql`
     INSERT INTO tm_departments (name) VALUES ('Executive') ON CONFLICT (name) DO NOTHING;
+  `;
+
+  console.log("Migrating task priority enum to P0-P3...");
+  await sql`
+    ALTER TABLE tm_tasks ALTER COLUMN priority DROP DEFAULT;
+  `;
+  await sql`
+    ALTER TABLE tm_tasks ALTER COLUMN priority TYPE VARCHAR USING priority::text;
+  `;
+  await sql`
+    DROP TYPE IF EXISTS tm_task_priority;
+  `;
+  await sql`
+    CREATE TYPE tm_task_priority AS ENUM ('P0', 'P1', 'P2', 'P3');
+  `;
+  await sql`
+    UPDATE tm_tasks SET priority = CASE
+      WHEN priority = 'urgent' THEN 'P0'
+      WHEN priority = 'high' THEN 'P1'
+      WHEN priority = 'medium' THEN 'P2'
+      WHEN priority = 'low' THEN 'P3'
+      WHEN priority IN ('P0', 'P1', 'P2', 'P3') THEN priority
+      ELSE 'P2'
+    END;
+  `;
+  await sql`
+    ALTER TABLE tm_tasks
+      ALTER COLUMN priority TYPE tm_task_priority USING priority::tm_task_priority,
+      ALTER COLUMN priority SET DEFAULT 'P2',
+      ALTER COLUMN priority SET NOT NULL;
+  `;
+
+  console.log("Creating tm_task_planning_stage enum...");
+  await sql`
+    DO $$ BEGIN
+      CREATE TYPE tm_task_planning_stage AS ENUM ('draft', 'brainstorming', 'discussed');
+    EXCEPTION
+      WHEN duplicate_object THEN null;
+    END $$;
+  `;
+
+  console.log("Adding planning_stage column to tm_tasks...");
+  await sql`
+    ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS planning_stage tm_task_planning_stage;
   `;
 
   console.log("Migration complete!");

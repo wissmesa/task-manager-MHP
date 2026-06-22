@@ -57,10 +57,10 @@ export const taskStatusEnum = pgEnum("tm_task_status", [
 ]);
 
 export const taskPriorityEnum = pgEnum("tm_task_priority", [
-  "low",
-  "medium",
-  "high",
-  "urgent",
+  "P0",
+  "P1",
+  "P2",
+  "P3",
 ]);
 
 export const approvalStatusEnum = pgEnum("tm_approval_status", [
@@ -68,6 +68,12 @@ export const approvalStatusEnum = pgEnum("tm_approval_status", [
   "pending_dept_approval",
   "approved",
   "rejected",
+]);
+
+export const taskPlanningStageEnum = pgEnum("tm_task_planning_stage", [
+  "draft",
+  "brainstorming",
+  "discussed",
 ]);
 
 // ── New tables ──────────────────────────────────────────────────────────────
@@ -79,7 +85,7 @@ export const tasks = pgTable("tm_tasks", {
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   status: taskStatusEnum("status").notNull().default("pending"),
-  priority: taskPriorityEnum("priority").notNull().default("medium"),
+  priority: taskPriorityEnum("priority").notNull().default("P2"),
   createdBy: varchar("created_by")
     .notNull()
     .references(() => users.id),
@@ -91,6 +97,7 @@ export const tasks = pgTable("tm_tasks", {
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
   completedAt: timestamp("completed_at"),
+  planningStage: taskPlanningStageEnum("planning_stage"),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

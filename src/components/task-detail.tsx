@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogTitle,
@@ -40,12 +46,28 @@ import {
   Pencil,
   X,
   Trash2,
+  Check,
   CheckCircle2,
   XCircle,
   ShieldCheck,
   Building2,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  TASK_PRIORITIES,
+  PRIORITY_LABELS,
+  PRIORITY_COLORS,
+  PRIORITY_DESCRIPTIONS,
+  getDueDateLimits,
+  formatDateInputValue,
+  type TaskPriority,
+} from "@/lib/task-priority";
+import {
+  TASK_PLANNING_STAGES,
+  PLANNING_STAGE_LABELS,
+  PLANNING_STAGE_COLORS,
+  type TaskPlanningStage,
+} from "@/lib/task-planning";
 
 interface TaskImage {
   id: string;
@@ -64,7 +86,7 @@ interface TaskData {
   title: string;
   description: string | null;
   status: "pending" | "in_progress" | "completed" | "cancelled";
-  priority: "low" | "medium" | "high" | "urgent";
+  priority: TaskPriority;
   approval: "pending_approval" | "pending_dept_approval" | "approved" | "rejected";
   ownBossApproved: boolean;
   approvedBy: string | null;
@@ -80,6 +102,7 @@ interface TaskData {
   assignedTo: string | null;
   departmentId: string | null;
   departmentName: string | null;
+  planningStage: TaskPlanningStage | null;
   images: TaskImage[];
 }
 
@@ -97,19 +120,8 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
 };
 
-const priorityLabels: Record<string, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
-};
-
-const priorityColors: Record<string, string> = {
-  low: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  medium: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  urgent: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-};
+const priorityLabels = PRIORITY_LABELS;
+const priorityColors = PRIORITY_COLORS;
 
 const approvalLabels: Record<string, string> = {
   pending_approval: "Pending Coordinator Approval",
@@ -124,6 +136,9 @@ const approvalColors: Record<string, string> = {
   approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
   rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400",
 };
+
+const planningStageLabels = PLANNING_STAGE_LABELS;
+const planningStageColors = PLANNING_STAGE_COLORS;
 
 interface TaskDetailProps {
   task: TaskData;
@@ -149,23 +164,27 @@ export function TaskDetail({
   const [deleting, setDeleting] = useState(false);
   const [isApproving, startApproving] = useTransition();
   const [isAssigning, startAssigning] = useTransition();
+  const [isUpdatingStage, startUpdatingStage] = useTransition();
+  const [isUpdatingDueDate, startUpdatingDueDate] = useTransition();
 
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
-  const [dueDate, setDueDate] = useState(
-    task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : ""
-  );
   const [editAssignee, setEditAssignee] = useState(task.assignedTo || "unassigned");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
+
+  const dueDateLimits = getDueDateLimits(task.priority, task.createdAt);
+  const dueDateMin = formatDateInputValue(dueDateLimits.min);
+  const dueDateMax = dueDateLimits.max ? formatDateInputValue(dueDateLimits.max) : undefined;
+  const dueDateWindowExpired =
+    dueDateLimits.max !== null && dueDateLimits.max < dueDateLimits.min;
 
   function handleCancel() {
     setTitle(task.title);
     setDescription(task.description ?? "");
     setStatus(task.status);
     setPriority(task.priority);
-    setDueDate(task.dueDate ? new Date(task.dueDate).toISOString().split("T")[0] : "");
     setEditAssignee(task.assignedTo || "unassigned");
     setEditing(false);
   }
@@ -179,7 +198,6 @@ export function TaskDetail({
         priority,
         status,
         assignedTo: editAssignee === "unassigned" ? null : editAssignee,
-        dueDate: dueDate || null,
       });
       setEditing(false);
       router.refresh();
@@ -218,6 +236,36 @@ export function TaskDetail({
   }
 
   const canAssign = isBossOfDepartment && task.approval === "approved" && !task.assignedTo;
+  const canEditDueDate =
+    currentUserId === task.assignedTo || isBossOfDepartment;
+  const canEditStage =
+    isOwner ||
+    isBossOfCreator ||
+    isBossOfDepartment ||
+    currentUserId === task.assignedTo;
+
+  function handleDueDateChange(value: string) {
+    startUpdatingDueDate(async () => {
+      try {
+        await updateTaskDueDate(task.id, value || null);
+        router.refresh();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Failed to update due date");
+      }
+    });
+  }
+
+  function handlePlanningStageChange(newStage: string) {
+    const planningStage = newStage === "none" ? null : (newStage as TaskPlanningStage);
+    startUpdatingStage(async () => {
+      try {
+        await updateTaskPlanningStage(task.id, planningStage);
+        router.refresh();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Failed to update stage");
+      }
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -409,6 +457,57 @@ export function TaskDetail({
                   <Flag className="mr-1 h-3 w-3" />
                   {priorityLabels[priority]}
                 </Badge>
+                {canEditStage ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="cursor-pointer">
+                        {task.planningStage ? (
+                          <Badge
+                            variant="secondary"
+                            className={`${planningStageColors[task.planningStage]} hover:opacity-80 transition-opacity`}
+                          >
+                            {planningStageLabels[task.planningStage]}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="secondary"
+                            className="border border-dashed border-muted-foreground/40 text-muted-foreground hover:opacity-80 transition-opacity"
+                          >
+                            Set stage
+                          </Badge>
+                        )}
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() => handlePlanningStageChange("none")}
+                        className="flex items-center justify-between gap-4"
+                      >
+                        <span className="text-muted-foreground">Standard task</span>
+                        {!task.planningStage && <Check className="h-4 w-4" />}
+                      </DropdownMenuItem>
+                      {TASK_PLANNING_STAGES.map((stage) => (
+                        <DropdownMenuItem
+                          key={stage}
+                          onClick={() => handlePlanningStageChange(stage)}
+                          className="flex items-center justify-between gap-4"
+                        >
+                          <Badge variant="secondary" className={planningStageColors[stage]}>
+                            {planningStageLabels[stage]}
+                          </Badge>
+                          {task.planningStage === stage && <Check className="h-4 w-4" />}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : task.planningStage ? (
+                  <Badge variant="secondary" className={planningStageColors[task.planningStage]}>
+                    {planningStageLabels[task.planningStage]}
+                  </Badge>
+                ) : null}
+                {isUpdatingStage && (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
                 {(() => {
                   const bossColor = task.approval === "pending_approval"
                     ? approvalColors.pending_approval
@@ -532,26 +631,21 @@ export function TaskDetail({
 
                 <div className="space-y-2">
                   <Label>Priority</Label>
-                  <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
+                  <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
+                      {TASK_PRIORITIES.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {PRIORITY_LABELS[p]}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Due Date</Label>
-                  <Input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                  />
+                  <p className="text-xs text-muted-foreground">
+                    {PRIORITY_DESCRIPTIONS[priority]}
+                  </p>
                 </div>
               </div>
 
@@ -611,7 +705,33 @@ export function TaskDetail({
                 <span>{task.assignee.fullName}</span>
               </div>
             )}
-            {!editing && task.dueDate && (
+            {canEditDueDate ? (
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4" />
+                  <Input
+                    type="date"
+                    defaultValue={task.dueDate ? formatDateInputValue(new Date(task.dueDate)) : ""}
+                    min={dueDateMin}
+                    max={dueDateMax}
+                    disabled={isUpdatingDueDate || dueDateWindowExpired}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="h-8 w-auto text-sm"
+                  />
+                  {isUpdatingDueDate && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground pl-6">
+                  {dueDateWindowExpired
+                    ? "The due date window for this priority has expired."
+                    : dueDateMax
+                      ? `Select a date by ${new Date(dueDateMax).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (${PRIORITY_DESCRIPTIONS[task.priority]})`
+                      : "No maximum limit for this priority (P3)."}
+                </p>
+              </div>
+            ) : task.dueDate ? (
               <div className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4" />
                 <span>
@@ -623,7 +743,7 @@ export function TaskDetail({
                   })}
                 </span>
               </div>
-            )}
+            ) : null}
             {task.completedAt && (
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <CalendarCheck className="h-4 w-4" />

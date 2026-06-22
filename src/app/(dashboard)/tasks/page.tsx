@@ -1,5 +1,5 @@
 import { getTasksForUser, getSubordinatesForBossDepts } from "@/lib/actions";
-import { TaskTable } from "@/components/task-table";
+import { TasksView } from "@/components/tasks-view";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import Link from "next/link";
@@ -31,7 +31,7 @@ export default async function TasksPage() {
         </Button>
       </div>
 
-      <TaskTable
+      <TasksView
         currentUserId={currentUserId}
         subordinatesMap={subordinatesMap}
         tasks={tasks.map((t) => ({
@@ -48,6 +48,7 @@ export default async function TasksPage() {
           dueDate: t.dueDate,
           createdAt: t.createdAt,
           completedAt: t.completedAt ?? null,
+          planningStage: t.planningStage ?? null,
           creator: t.creator ? { fullName: t.creator.fullName } : null,
           assignee: t.assignee ? { id: t.assignee.id, fullName: t.assignee.fullName } : null,
           department: t.department ? { name: t.department.name } : null,

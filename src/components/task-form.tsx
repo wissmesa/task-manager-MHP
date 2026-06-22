@@ -21,6 +21,12 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Loader2, Upload, X, ImageIcon } from "lucide-react";
+import {
+  TASK_PRIORITIES,
+  PRIORITY_LABELS,
+  PRIORITY_DESCRIPTIONS,
+  type TaskPriority,
+} from "@/lib/task-priority";
 
 interface Department {
   id: string;
@@ -43,10 +49,10 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [images, setImages] = useState<LocalImage[]>([]);
-  const [priority, setPriority] = useState("medium");
+  const [priority, setPriority] = useState<TaskPriority>("P2");
   const [departmentId, setDepartmentId] = useState("none");
   const [assignedTo, setAssignedTo] = useState("unassigned");
-  const [dueDate, setDueDate] = useState("");
+  const [planningStage, setPlanningStage] = useState("none");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDept = departments.find((d) => d.id === departmentId);
@@ -89,8 +95,8 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       if (assignedTo && assignedTo !== "unassigned") {
         formData.set("assignedTo", assignedTo);
       }
-      if (dueDate) {
-        formData.set("dueDate", dueDate);
+      if (planningStage !== "none") {
+        formData.set("planningStage", planningStage);
       }
 
       images.forEach((img) => formData.append("files", img.file));
@@ -144,20 +150,24 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
             />
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Select value={priority} onValueChange={setPriority}>
+              <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
+                  {TASK_PRIORITIES.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {PRIORITY_LABELS[p]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                {PRIORITY_DESCRIPTIONS[priority]}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -176,16 +186,24 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="dueDate">Due Date</Label>
-              <Input
-                id="dueDate"
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label>Planning Stage</Label>
+            <Select value={planningStage} onValueChange={setPlanningStage}>
+              <SelectTrigger className="w-full sm:w-[320px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Standard task (ready to work)</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="brainstorming">Brainstorming</SelectItem>
+                <SelectItem value="discussed">Fully discussed</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Draft, brainstorming, and fully discussed tasks appear in the Planning tab.
+            </p>
           </div>
 
           <div className="space-y-2">

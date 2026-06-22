@@ -58,6 +58,7 @@ export default async function TaskDetailPage({
           assignedTo: task.assignedTo,
           departmentId: task.departmentId,
           departmentName: task.department?.name ?? null,
+          planningStage: task.planningStage ?? null,
           creator: task.creator
             ? { fullName: task.creator.fullName, email: task.creator.email }
             : null,
