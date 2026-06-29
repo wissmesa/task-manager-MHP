@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate } from "@/lib/actions";
@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Loader2, Check, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -73,8 +73,11 @@ type TaskRow = {
 
 interface TaskTableProps {
   tasks: TaskRow[];
+  totalTasks: number;
   currentUserId: string;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
+  page: number;
+  onPageChange: (page: number) => void;
   showStageColumn?: boolean;
 }
 
@@ -171,32 +174,19 @@ function deriveDeptApproval(task: TaskRow): ApprovalBadge {
 
 export function TaskTable({
   tasks,
+  totalTasks,
   currentUserId,
   subordinatesMap,
+  page,
+  onPageChange,
   showStageColumn = false,
 }: TaskTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [personFilter, setPersonFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
   const [savingCell, setSavingCell] = useState<string | null>(null);
 
   const PAGE_SIZE = 20;
-
-  const people = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of tasks) {
-      if (t.creator) map.set(t.createdBy, t.creator.fullName);
-      if (t.assignee) map.set(t.assignee.id, t.assignee.fullName);
-    }
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [tasks]);
 
   function handleRowClick(taskId: string) {
     setLoadingId(taskId);
@@ -277,37 +267,9 @@ export function TaskTable({
     });
   }
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.toLowerCase().trim();
-    return tasks.filter((t) => {
-      if (statusFilter !== "all" && t.status !== statusFilter) return false;
-      if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-      if (personFilter !== "all") {
-        const matchesCreator = t.createdBy === personFilter;
-        const matchesAssignee = t.assignedTo === personFilter;
-        if (!matchesCreator && !matchesAssignee) return false;
-      }
-      if (query) {
-        const titleMatch = t.title.toLowerCase().includes(query);
-        const creatorMatch = t.creator?.fullName.toLowerCase().includes(query);
-        const assigneeMatch = t.assignee?.fullName.toLowerCase().includes(query);
-        const deptMatch = t.department?.name.toLowerCase().includes(query);
-        if (!titleMatch && !creatorMatch && !assigneeMatch && !deptMatch) return false;
-      }
-      return true;
-    });
-  }, [tasks, statusFilter, priorityFilter, personFilter, searchQuery]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedTasks = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  function handleFilterChange<T>(setter: (v: T) => void) {
-    return (value: T) => {
-      setter(value);
-      setCurrentPage(1);
-    };
-  }
+  const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedTasks = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   function formatShortDate(date: Date) {
     return new Date(date).toLocaleDateString("en-US", {
@@ -345,62 +307,6 @@ export function TaskTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="pl-9"
-          />
-        </div>
-
-        <Select value={statusFilter} onValueChange={handleFilterChange(setStatusFilter)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={priorityFilter} onValueChange={handleFilterChange(setPriorityFilter)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            {TASK_PRIORITIES.map((p) => (
-              <SelectItem key={p} value={p}>
-                {PRIORITY_LABELS[p]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={personFilter} onValueChange={handleFilterChange(setPersonFilter)}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Person" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All People</SelectItem>
-            {people.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="rounded-lg border overflow-hidden">
         <Table containerClassName="overflow-x-hidden" className="table-fixed w-full text-xs sm:text-sm">
           <TableHeader>
@@ -775,8 +681,8 @@ export function TaskTable({
 
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Showing {Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} tasks
-          {filtered.length !== tasks.length && ` (${tasks.length} total)`}
+          Showing {tasks.length === 0 ? 0 : Math.min((safePage - 1) * PAGE_SIZE + 1, tasks.length)}–{Math.min(safePage * PAGE_SIZE, tasks.length)} of {tasks.length} tasks
+          {tasks.length !== totalTasks && ` (${totalTasks} total)`}
         </p>
 
         {totalPages > 1 && (
@@ -785,7 +691,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage(1)}
+              onClick={() => onPageChange(1)}
               disabled={safePage <= 1}
             >
               <ChevronsLeft className="h-4 w-4" />
@@ -794,7 +700,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => onPageChange(Math.max(1, safePage - 1))}
               disabled={safePage <= 1}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -806,7 +712,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
               disabled={safePage >= totalPages}
             >
               <ChevronRight className="h-4 w-4" />
@@ -815,7 +721,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage(totalPages)}
+              onClick={() => onPageChange(totalPages)}
               disabled={safePage >= totalPages}
             >
               <ChevronsRight className="h-4 w-4" />

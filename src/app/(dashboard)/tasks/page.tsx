@@ -1,4 +1,4 @@
-import { getTasksForUser, getSubordinatesForBossDepts } from "@/lib/actions";
+import { getTasksForUser, getSubordinatesForBossDepts, getCurrentUserDepartment } from "@/lib/actions";
 import { TasksView } from "@/components/tasks-view";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
@@ -6,10 +6,11 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 export default async function TasksPage() {
-  const [tasks, subordinatesMap, session] = await Promise.all([
+  const [tasks, subordinatesMap, session, userDepartment] = await Promise.all([
     getTasksForUser(),
     getSubordinatesForBossDepts(),
     auth(),
+    getCurrentUserDepartment(),
   ]);
 
   const currentUserId = session?.user?.id ?? "";
@@ -33,6 +34,8 @@ export default async function TasksPage() {
 
       <TasksView
         currentUserId={currentUserId}
+        currentUserDepartmentId={userDepartment?.id ?? null}
+        currentUserDepartmentName={userDepartment?.name ?? null}
         subordinatesMap={subordinatesMap}
         tasks={tasks.map((t) => ({
           id: t.id,

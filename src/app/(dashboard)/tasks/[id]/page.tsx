@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo } from "@/lib/actions";
 import { TaskDetail } from "@/components/task-detail";
 import { auth } from "@/lib/auth";
@@ -38,7 +39,8 @@ export default async function TaskDetailPage({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <TaskDetail
+      <Suspense fallback={<div className="h-40 animate-pulse rounded-lg bg-muted/40" />}>
+        <TaskDetail
         task={{
           id: task.id,
           title: task.title,
@@ -75,7 +77,8 @@ export default async function TaskDetailPage({
         isBossOfCreator={isBossOfCreator}
         isBossOfDepartment={isBossOfDepartment}
         subordinates={subordinates}
-      />
+        />
+      </Suspense>
     </div>
   );
 }

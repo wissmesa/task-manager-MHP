@@ -782,6 +782,19 @@ async function resolveImageUrls(
   );
 }
 
+export async function getCurrentUserDepartment() {
+  const session = await auth();
+  if (!session?.user) return null;
+
+  const ud = await db.query.userDepartment.findFirst({
+    where: eq(userDepartment.userId, session.user.id),
+    with: { department: { columns: { id: true, name: true } } },
+  });
+
+  if (!ud?.department) return null;
+  return { id: ud.departmentId, name: ud.department.name };
+}
+
 export async function getTasksForUser() {
   const session = await auth();
   if (!session?.user) return [];
