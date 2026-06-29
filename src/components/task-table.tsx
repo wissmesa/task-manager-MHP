@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate } from "@/lib/actions";
@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -172,6 +172,73 @@ function deriveDeptApproval(task: TaskRow): ApprovalBadge {
   }
 }
 
+type SortKey =
+  | "title"
+  | "stage"
+  | "status"
+  | "priority"
+  | "coord"
+  | "dept"
+  | "department"
+  | "assignee"
+  | "due"
+  | "created"
+  | "done"
+  | "by";
+
+type SortState = { key: SortKey; dir: "asc" | "desc" };
+
+const STATUS_ORDER: Record<string, number> = {
+  pending: 0,
+  in_progress: 1,
+  completed: 2,
+  cancelled: 3,
+};
+
+const PRIORITY_ORDER: Record<string, number> = {
+  P0: 0,
+  P1: 1,
+  P2: 2,
+  P3: 3,
+};
+
+const STAGE_ORDER: Record<string, number> = {
+  draft: 0,
+  brainstorming: 1,
+  discussed: 2,
+};
+
+function getSortValue(task: TaskRow, key: SortKey): string | number | null {
+  switch (key) {
+    case "title":
+      return task.title?.toLowerCase() ?? null;
+    case "stage":
+      return task.planningStage ? STAGE_ORDER[task.planningStage] : null;
+    case "status":
+      return STATUS_ORDER[task.status] ?? null;
+    case "priority":
+      return PRIORITY_ORDER[task.priority] ?? null;
+    case "coord":
+      return deriveCoordinatorApproval(task).label;
+    case "dept":
+      return deriveDeptApproval(task).label;
+    case "department":
+      return task.department?.name?.toLowerCase() ?? null;
+    case "assignee":
+      return task.assignee?.fullName.toLowerCase() ?? null;
+    case "due":
+      return task.dueDate ? new Date(task.dueDate).getTime() : null;
+    case "created":
+      return new Date(task.createdAt).getTime();
+    case "done":
+      return task.completedAt ? new Date(task.completedAt).getTime() : null;
+    case "by":
+      return task.creator?.fullName.toLowerCase() ?? null;
+    default:
+      return null;
+  }
+}
+
 export function TaskTable({
   tasks,
   totalTasks,
@@ -185,8 +252,38 @@ export function TaskTable({
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [savingCell, setSavingCell] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState | null>(null);
 
   const PAGE_SIZE = 20;
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) => {
+      if (prev?.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      }
+      return { key, dir: "asc" };
+    });
+    onPageChange(1);
+  }
+
+  const sortedTasks = useMemo(() => {
+    if (!sort) return tasks;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...tasks].sort((a, b) => {
+      const av = getSortValue(a, sort.key);
+      const bv = getSortValue(b, sort.key);
+      const aNull = av === null || av === undefined || av === "";
+      const bNull = bv === null || bv === undefined || bv === "";
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+      return dir * cmp;
+    });
+  }, [tasks, sort]);
 
   function handleRowClick(taskId: string) {
     setLoadingId(taskId);
@@ -267,9 +364,42 @@ export function TaskTable({
     });
   }
 
-  const totalPages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paginatedTasks = tasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginatedTasks = sortedTasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  function SortableHead({
+    label,
+    sortKey,
+    className,
+  }: {
+    label: string;
+    sortKey: SortKey;
+    className?: string;
+  }) {
+    const active = sort?.key === sortKey;
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          onClick={() => toggleSort(sortKey)}
+          className="group inline-flex w-full items-center gap-1 hover:text-foreground"
+          title={`Sort by ${label}`}
+        >
+          <span className="truncate">{label}</span>
+          {active ? (
+            sort?.dir === "asc" ? (
+              <ArrowUp className="h-3 w-3 shrink-0" />
+            ) : (
+              <ArrowDown className="h-3 w-3 shrink-0" />
+            )
+          ) : (
+            <ArrowUpDown className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-50" />
+          )}
+        </button>
+      </TableHead>
+    );
+  }
 
   function formatShortDate(date: Date) {
     return new Date(date).toLocaleDateString("en-US", {
@@ -311,18 +441,18 @@ export function TaskTable({
         <Table containerClassName="overflow-x-hidden" className="table-fixed w-full text-xs sm:text-sm">
           <TableHeader>
             <TableRow>
-              <TableHead className={showStageColumn ? "w-[24%]" : "w-[31%]"}>Title</TableHead>
-              {showStageColumn && <TableHead className="w-[7%]">Stage</TableHead>}
-              <TableHead className="w-[8%]">Status</TableHead>
-              <TableHead className="w-[5%]">Pri.</TableHead>
-              <TableHead className="w-[7%]">Coord.</TableHead>
-              <TableHead className="w-[7%]">Dept.</TableHead>
-              <TableHead className="w-[10%]">Department</TableHead>
-              <TableHead className="w-[5%]">Assignee</TableHead>
-              <TableHead className="w-[7%]">Due</TableHead>
-              <TableHead className="w-[7%]">Created</TableHead>
-              <TableHead className="w-[7%]">Done</TableHead>
-              <TableHead className="w-[5%]">By</TableHead>
+              <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[24%]" : "w-[31%]"} />
+              {showStageColumn && <SortableHead label="Stage" sortKey="stage" className="w-[7%]" />}
+              <SortableHead label="Status" sortKey="status" className="w-[8%]" />
+              <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
+              <SortableHead label="Coord." sortKey="coord" className="w-[7%]" />
+              <SortableHead label="Dept." sortKey="dept" className="w-[7%]" />
+              <SortableHead label="Department" sortKey="department" className="w-[10%]" />
+              <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
+              <SortableHead label="Due" sortKey="due" className="w-[7%]" />
+              <SortableHead label="Created" sortKey="created" className="w-[7%]" />
+              <SortableHead label="Done" sortKey="done" className="w-[7%]" />
+              <SortableHead label="By" sortKey="by" className="w-[5%]" />
             </TableRow>
           </TableHeader>
           <TableBody>
