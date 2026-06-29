@@ -44,6 +44,7 @@ interface TasksViewProps {
   currentUserId: string;
   currentUserDepartmentId: string | null;
   currentUserDepartmentName: string | null;
+  isAdmin?: boolean;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
 }
 
@@ -52,6 +53,7 @@ function TasksViewContent({
   currentUserId,
   currentUserDepartmentId,
   currentUserDepartmentName,
+  isAdmin = false,
   subordinatesMap,
 }: TasksViewProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -199,6 +201,7 @@ function TasksViewContent({
         <TabsContent value="active">
           <TaskTable
             currentUserId={currentUserId}
+            isAdmin={isAdmin}
             subordinatesMap={subordinatesMap}
             tasks={filteredRegularTasks}
             totalTasks={regularTasks.length}
@@ -210,6 +213,7 @@ function TasksViewContent({
         <TabsContent value="planning">
           <TaskTable
             currentUserId={currentUserId}
+            isAdmin={isAdmin}
             subordinatesMap={subordinatesMap}
             tasks={filteredPlanningTasks}
             totalTasks={planningTasks.length}

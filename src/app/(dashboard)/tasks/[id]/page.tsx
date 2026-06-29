@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo } from "@/lib/actions";
+import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments } from "@/lib/actions";
 import { TaskDetail } from "@/components/task-detail";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
@@ -18,6 +18,7 @@ export default async function TaskDetailPage({
   if (!task) notFound();
 
   const currentUserId = session?.user?.id ?? "";
+  const isAdmin = session?.user?.email === "luis@bluepaperclip.com";
 
   const [creatorBossId, creatorDeptInfo] = await Promise.all([
     getBossForUser(task.createdBy),
@@ -36,6 +37,10 @@ export default async function TaskDetailPage({
       subordinates = await getDepartmentSubordinates(task.departmentId);
     }
   }
+
+  const departments = isAdmin
+    ? (await getDepartments()).map((d) => ({ id: d.id, name: d.name }))
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -76,6 +81,8 @@ export default async function TaskDetailPage({
         currentUserId={currentUserId}
         isBossOfCreator={isBossOfCreator}
         isBossOfDepartment={isBossOfDepartment}
+        isAdmin={isAdmin}
+        departments={departments}
         subordinates={subordinates}
         />
       </Suspense>

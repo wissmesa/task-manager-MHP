@@ -30,6 +30,10 @@ async function requireAdmin() {
   return user;
 }
 
+function isAdminUser(user: { email?: string | null }) {
+  return user.email === ADMIN_EMAIL;
+}
+
 async function verifyTaskOwner(taskId: string, userId: string) {
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
@@ -152,7 +156,7 @@ export async function updateTaskStatus(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.createdBy === user.id || task.assignedTo === user.id;
+  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -218,7 +222,7 @@ export async function updateTaskPriority(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.createdBy === user.id || task.assignedTo === user.id;
+  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -261,7 +265,7 @@ export async function updateTaskPlanningStage(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.createdBy === user.id || task.assignedTo === user.id;
+  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -301,7 +305,7 @@ export async function updateTaskAssignee(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.createdBy === user.id;
+  let allowed = isAdminUser(user) || task.createdBy === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -358,6 +362,7 @@ export async function updateTask(
     priority: TaskPriority;
     status: "pending" | "in_progress" | "completed" | "cancelled";
     assignedTo: string | null;
+    departmentId?: string | null;
   }
 ) {
   const user = await requireAuth();
@@ -368,7 +373,7 @@ export async function updateTask(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.createdBy === user.id;
+  let allowed = isAdminUser(user) || task.createdBy === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -398,6 +403,10 @@ export async function updateTask(
     updatePayload.completedAt = null;
   }
 
+  if (data.departmentId !== undefined && isAdminUser(user)) {
+    updatePayload.departmentId = data.departmentId;
+  }
+
   await db
     .update(tasks)
     .set(updatePayload)
@@ -416,7 +425,7 @@ export async function updateTaskDueDate(taskId: string, dueDateStr: string | nul
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.assignedTo === user.id;
+  let allowed = isAdminUser(user) || task.assignedTo === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -458,7 +467,7 @@ export async function deleteTask(taskId: string) {
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = task.createdBy === user.id;
+  let allowed = isAdminUser(user) || task.createdBy === user.id;
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -809,10 +818,11 @@ export async function getTasksForUser() {
   });
 
   const isExecutive = myDept?.department?.name?.toLowerCase() === "executive";
+  const canSeeAllTasks = isExecutive || session.user.email === ADMIN_EMAIL;
 
   let allTasks;
 
-  if (isExecutive) {
+  if (canSeeAllTasks) {
     allTasks = await db.query.tasks.findMany({
       with: {
         creator: true,

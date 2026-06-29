@@ -14,6 +14,7 @@ export default async function TasksPage() {
   ]);
 
   const currentUserId = session?.user?.id ?? "";
+  const isAdmin = session?.user?.email === "luis@bluepaperclip.com";
 
   return (
     <div className="space-y-6">
@@ -36,6 +37,7 @@ export default async function TasksPage() {
         currentUserId={currentUserId}
         currentUserDepartmentId={userDepartment?.id ?? null}
         currentUserDepartmentName={userDepartment?.name ?? null}
+        isAdmin={isAdmin}
         subordinatesMap={subordinatesMap}
         tasks={tasks.map((t) => ({
           id: t.id,

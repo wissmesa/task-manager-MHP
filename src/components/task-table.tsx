@@ -75,6 +75,7 @@ interface TaskTableProps {
   tasks: TaskRow[];
   totalTasks: number;
   currentUserId: string;
+  isAdmin?: boolean;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
   page: number;
   onPageChange: (page: number) => void;
@@ -243,6 +244,7 @@ export function TaskTable({
   tasks,
   totalTasks,
   currentUserId,
+  isAdmin = false,
   subordinatesMap,
   page,
   onPageChange,
@@ -469,14 +471,15 @@ export function TaskTable({
                 const isBossOfCreatorDept =
                   !!task.creatorDeptId && !!subordinatesMap[task.creatorDeptId];
                 const canEditStatus =
+                  isAdmin ||
                   task.createdBy === currentUserId ||
                   task.assignedTo === currentUserId ||
                   isBossOfTaskDept ||
                   isBossOfCreatorDept;
                 const canEditAssignee =
-                  (task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
+                  (isAdmin || task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
                 const canEditDueDate =
-                  task.assignedTo === currentUserId || isBossOfTaskDept;
+                  isAdmin || task.assignedTo === currentUserId || isBossOfTaskDept;
                 const subs = task.departmentId
                   ? subordinatesMap[task.departmentId] ?? []
                   : [];
