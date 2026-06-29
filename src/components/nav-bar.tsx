@@ -6,6 +6,7 @@ import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { LogOut, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface NavBarProps {
   userName: string;
@@ -43,6 +44,7 @@ export function NavBar({ userName, userEmail }: NavBarProps) {
           <span className="hidden sm:inline text-sm text-muted-foreground">
             {userName}
           </span>
+          <ThemeToggle />
           <Button
             variant="ghost"
             size="sm"
