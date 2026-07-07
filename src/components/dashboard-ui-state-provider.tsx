@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { FilterState } from "@/lib/task-filters";
 
 type TasksTab = "active" | "planning";
+export type TasksViewMode = "list" | "grouped" | "kanban";
 
 type DashboardUiStateContextValue = {
   tasksTab: TasksTab;
@@ -12,6 +13,8 @@ type DashboardUiStateContextValue = {
   setTasksPage: (page: number) => void;
   taskFilters: FilterState;
   setTaskFilters: (filters: FilterState) => void;
+  tasksViewMode: TasksViewMode;
+  setTasksViewMode: (mode: TasksViewMode) => void;
 };
 
 const DashboardUiStateContext = createContext<DashboardUiStateContextValue | null>(null);
@@ -20,6 +23,7 @@ export function DashboardUiStateProvider({ children }: { children: ReactNode }) 
   const [tasksTab, setTasksTab] = useState<TasksTab>("active");
   const [tasksPage, setTasksPage] = useState(1);
   const [taskFilters, setTaskFilters] = useState<FilterState>({ groups: [] });
+  const [tasksViewMode, setTasksViewMode] = useState<TasksViewMode>("list");
 
   const value = useMemo(
     () => ({
@@ -29,8 +33,10 @@ export function DashboardUiStateProvider({ children }: { children: ReactNode }) 
       setTasksPage,
       taskFilters,
       setTaskFilters,
+      tasksViewMode,
+      setTasksViewMode,
     }),
-    [tasksTab, tasksPage, taskFilters]
+    [tasksTab, tasksPage, taskFilters, tasksViewMode]
   );
 
   return (

@@ -6,6 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TaskTable } from "@/components/task-table";
+import {
+  GroupedTaskTables,
+  KanbanBoard,
+  TaskViewModeToggle,
+} from "@/components/task-views";
 import { useDashboardUiState } from "@/components/dashboard-ui-state-provider";
 import {
   ActiveFilterBadges,
@@ -72,6 +77,8 @@ function TasksViewContent({
     setTasksPage,
     taskFilters: filterState,
     setTaskFilters,
+    tasksViewMode: viewMode,
+    setTasksViewMode: setViewMode,
   } = useDashboardUiState();
 
   const router = useRouter();
@@ -243,6 +250,10 @@ function TasksViewContent({
             Clear
           </Button>
         )}
+
+        <div className="ml-auto">
+          <TaskViewModeToggle mode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       <ActiveFilterBadges
@@ -277,30 +288,55 @@ function TasksViewContent({
         </TabsList>
 
         <TabsContent value="active">
-          <TaskTable
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            canEditDevFields={canEditDevFields}
-            subordinatesMap={subordinatesMap}
-            tasks={filteredRegularTasks}
-            totalTasks={regularTasks.length}
-            page={page}
-            onPageChange={setTasksPage}
-          />
+          {viewMode === "kanban" ? (
+            <KanbanBoard tasks={filteredRegularTasks} />
+          ) : viewMode === "grouped" ? (
+            <GroupedTaskTables
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              canEditDevFields={canEditDevFields}
+              subordinatesMap={subordinatesMap}
+              tasks={filteredRegularTasks}
+            />
+          ) : (
+            <TaskTable
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              canEditDevFields={canEditDevFields}
+              subordinatesMap={subordinatesMap}
+              tasks={filteredRegularTasks}
+              totalTasks={regularTasks.length}
+              page={page}
+              onPageChange={setTasksPage}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="planning">
-          <TaskTable
-            currentUserId={currentUserId}
-            isAdmin={isAdmin}
-            canEditDevFields={canEditDevFields}
-            subordinatesMap={subordinatesMap}
-            tasks={filteredPlanningTasks}
-            totalTasks={planningTasks.length}
-            page={page}
-            onPageChange={setTasksPage}
-            showStageColumn
-          />
+          {viewMode === "kanban" ? (
+            <KanbanBoard tasks={filteredPlanningTasks} />
+          ) : viewMode === "grouped" ? (
+            <GroupedTaskTables
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              canEditDevFields={canEditDevFields}
+              subordinatesMap={subordinatesMap}
+              tasks={filteredPlanningTasks}
+              showStageColumn
+            />
+          ) : (
+            <TaskTable
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              canEditDevFields={canEditDevFields}
+              subordinatesMap={subordinatesMap}
+              tasks={filteredPlanningTasks}
+              totalTasks={planningTasks.length}
+              page={page}
+              onPageChange={setTasksPage}
+              showStageColumn
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>
