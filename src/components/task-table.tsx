@@ -592,8 +592,6 @@ export function TaskTable({
               <SortableHead label="Effort" sortKey="effort" className="w-[7%]" />
               <SortableHead label="Value" sortKey="value" className="w-[6%]" />
               <SortableHead label="Category" sortKey="category" className="w-[10%]" />
-              <SortableHead label="Coord." sortKey="coord" className="w-[6%]" />
-              <SortableHead label="Dept." sortKey="dept" className="w-[6%]" />
               <SortableHead label="Department" sortKey="department" className="w-[7%]" />
               <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
               <SortableHead label="Due" sortKey="due" className="w-[7%]" />
@@ -605,7 +603,7 @@ export function TaskTable({
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={(showStageColumn ? 15 : 14) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={(showStageColumn ? 13 : 12) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -1067,26 +1065,6 @@ export function TaskTable({
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
-                    </TableCell>
-                    <TableCell className="px-1.5">
-                      {(() => {
-                        const b = deriveCoordinatorApproval(task);
-                        return (
-                          <Badge variant="secondary" className={`text-xs ${b.color}`}>
-                            {b.label}
-                          </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="px-1.5">
-                      {(() => {
-                        const b = deriveDeptApproval(task);
-                        return (
-                          <Badge variant="secondary" className={`text-xs ${b.color}`}>
-                            {b.label}
-                          </Badge>
-                        );
-                      })()}
                     </TableCell>
                     <TableCell className="max-w-0 truncate px-1.5 text-muted-foreground">
                       {task.department?.name ?? "—"}
