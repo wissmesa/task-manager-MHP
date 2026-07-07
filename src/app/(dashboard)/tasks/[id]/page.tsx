@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments } from "@/lib/actions";
+import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments, getCurrentUserDepartment } from "@/lib/actions";
 import { TaskDetail } from "@/components/task-detail";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
@@ -42,6 +42,9 @@ export default async function TaskDetailPage({
     ? (await getDepartments()).map((d) => ({ id: d.id, name: d.name }))
     : [];
 
+  const viewerDept = await getCurrentUserDepartment();
+  const canEditDevFields = isAdmin || viewerDept?.name === "Development";
+
   return (
     <div className="mx-auto max-w-3xl">
       <Suspense fallback={<div className="h-40 animate-pulse rounded-lg bg-muted/40" />}>
@@ -66,6 +69,8 @@ export default async function TaskDetailPage({
           departmentId: task.departmentId,
           departmentName: task.department?.name ?? null,
           planningStage: task.planningStage ?? null,
+          waitingForBundle: task.waitingForBundle ?? false,
+          devTarget: task.devTarget ?? null,
           creator: task.creator
             ? { fullName: task.creator.fullName, email: task.creator.email }
             : null,
@@ -82,6 +87,7 @@ export default async function TaskDetailPage({
         isBossOfCreator={isBossOfCreator}
         isBossOfDepartment={isBossOfDepartment}
         isAdmin={isAdmin}
+        canEditDevFields={canEditDevFields}
         departments={departments}
         subordinates={subordinates}
         />

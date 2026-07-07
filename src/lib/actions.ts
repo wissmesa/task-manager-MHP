@@ -479,6 +479,21 @@ export async function updateTask(
 
   if (data.departmentId !== undefined && isAdminUser(user)) {
     updatePayload.departmentId = data.departmentId;
+
+    // Dev-only fields only make sense for the Development department.
+    // If the task is moved to any other department (or none), clear them.
+    let newDeptName: string | null = null;
+    if (data.departmentId) {
+      const newDept = await db.query.departments.findFirst({
+        where: eq(departments.id, data.departmentId),
+        columns: { name: true },
+      });
+      newDeptName = newDept?.name ?? null;
+    }
+    if (newDeptName !== "Development") {
+      updatePayload.waitingForBundle = false;
+      updatePayload.devTarget = null;
+    }
   }
 
   await db

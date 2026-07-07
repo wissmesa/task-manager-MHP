@@ -45,6 +45,13 @@ interface TaskFormProps {
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
 }
 
+const DEV_TARGET_OPTIONS = [
+  { value: "task_manager", label: "Task Manager" },
+  { value: "web_app", label: "Web App" },
+  { value: "mobile_app", label: "Mobile App" },
+  { value: "both", label: "Both (Web App, Mobile App)" },
+];
+
 export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -53,11 +60,13 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
   const [departmentId, setDepartmentId] = useState("none");
   const [assignedTo, setAssignedTo] = useState("unassigned");
   const [planningStage, setPlanningStage] = useState("none");
+  const [devTarget, setDevTarget] = useState("none");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDept = departments.find((d) => d.id === departmentId);
   const isBossOfSelected = selectedDept?.bossId === currentUserId;
   const subordinates = isBossOfSelected ? (subordinatesMap[departmentId] ?? []) : [];
+  const isDevelopmentDept = selectedDept?.name === "Development";
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
@@ -101,6 +110,9 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       }
       if (planningStage !== "none") {
         formData.set("planningStage", planningStage);
+      }
+      if (isDevelopmentDept && devTarget !== "none") {
+        formData.set("devTarget", devTarget);
       }
 
       images.forEach((img) => formData.append("files", img.file));
@@ -176,7 +188,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
 
             <div className="space-y-2">
               <Label>Department *</Label>
-              <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssignedTo("unassigned"); }}>
+              <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssignedTo("unassigned"); setDevTarget("none"); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select department..." />
                 </SelectTrigger>
@@ -190,6 +202,28 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
               </Select>
             </div>
           </div>
+
+          {isDevelopmentDept && (
+            <div className="space-y-2">
+              <Label>Target</Label>
+              <Select value={devTarget} onValueChange={setDevTarget}>
+                <SelectTrigger className="w-full sm:w-[320px]">
+                  <SelectValue placeholder="Select target..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not specified</SelectItem>
+                  {DEV_TARGET_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Where this task applies: Task Manager, Web App, Mobile App, or both.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Planning Stage</Label>

@@ -45,11 +45,20 @@ export async function POST(req: NextRequest) {
 
   const departmentExists = await db.query.departments.findFirst({
     where: eq(departments.id, departmentId.trim()),
-    columns: { id: true },
+    columns: { id: true, name: true },
   });
   if (!departmentExists) {
     return NextResponse.json({ error: "Invalid department" }, { status: 400 });
   }
+
+  const DEV_TARGET_VALUES = ["task_manager", "web_app", "mobile_app", "both"] as const;
+  const devTargetRaw = formData.get("devTarget") as string | null;
+  const devTarget =
+    departmentExists.name === "Development" &&
+    devTargetRaw &&
+    DEV_TARGET_VALUES.includes(devTargetRaw as (typeof DEV_TARGET_VALUES)[number])
+      ? (devTargetRaw as (typeof DEV_TARGET_VALUES)[number])
+      : null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenantId: string | null = (session.user as any).tenantId ?? null;
@@ -113,6 +122,7 @@ export async function POST(req: NextRequest) {
       departmentId: departmentId || null,
       dueDate: null,
       planningStage,
+      devTarget,
       approval: approvalStatus,
       ownBossApproved,
       approvedBy,

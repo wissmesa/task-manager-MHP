@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,8 +103,19 @@ interface TaskData {
   departmentId: string | null;
   departmentName: string | null;
   planningStage: TaskPlanningStage | null;
+  waitingForBundle: boolean;
+  devTarget: DevTarget | null;
   images: TaskImage[];
 }
+
+type DevTarget = "task_manager" | "web_app" | "mobile_app" | "both";
+
+const DEV_TARGET_OPTIONS: { value: DevTarget; label: string }[] = [
+  { value: "task_manager", label: "Task Manager" },
+  { value: "web_app", label: "Web App" },
+  { value: "mobile_app", label: "Mobile App" },
+  { value: "both", label: "Both (Web App, Mobile App)" },
+];
 
 const statusLabels: Record<string, string> = {
   pending: "Pending",
@@ -146,6 +157,7 @@ interface TaskDetailProps {
   isBossOfCreator: boolean;
   isBossOfDepartment: boolean;
   isAdmin?: boolean;
+  canEditDevFields?: boolean;
   departments?: { id: string; name: string }[];
   subordinates: Subordinate[];
 }
@@ -156,12 +168,14 @@ export function TaskDetail({
   isBossOfCreator,
   isBossOfDepartment,
   isAdmin = false,
+  canEditDevFields = false,
   departments = [],
   subordinates,
 }: TaskDetailProps) {
   const router = useRouter();
   const isOwner = currentUserId === task.createdBy;
   const canEdit = isOwner || isBossOfDepartment || isAdmin;
+  const isDevTask = task.departmentName === "Development";
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -177,7 +191,23 @@ export function TaskDetail({
   const [priority, setPriority] = useState(task.priority);
   const [editAssignee, setEditAssignee] = useState(task.assignedTo || "unassigned");
   const [editDepartment, setEditDepartment] = useState(task.departmentId || "none");
+  const [editWaitingForBundle, setEditWaitingForBundle] = useState(task.waitingForBundle);
+  const [editDevTarget, setEditDevTarget] = useState<string>(task.devTarget ?? "none");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
+
+  const editDeptName = isAdmin
+    ? (departments.find((d) => d.id === editDepartment)?.name ?? null)
+    : task.departmentName;
+  const isDevSelected = editDeptName === "Development";
+
+  function handleEditDepartmentChange(value: string) {
+    setEditDepartment(value);
+    const name = departments.find((d) => d.id === value)?.name ?? null;
+    if (name !== "Development") {
+      setEditWaitingForBundle(false);
+      setEditDevTarget("none");
+    }
+  }
 
   const dueDateLimits = getDueDateLimits(task.priority, task.createdAt);
   const dueDateMin = formatDateInputValue(dueDateLimits.min);
@@ -192,6 +222,8 @@ export function TaskDetail({
     setPriority(task.priority);
     setEditAssignee(task.assignedTo || "unassigned");
     setEditDepartment(task.departmentId || "none");
+    setEditWaitingForBundle(task.waitingForBundle);
+    setEditDevTarget(task.devTarget ?? "none");
     setEditing(false);
   }
 
@@ -208,6 +240,17 @@ export function TaskDetail({
           ? { departmentId: editDepartment === "none" ? null : editDepartment }
           : {}),
       });
+
+      if (canEditDevFields && isDevSelected) {
+        if (editWaitingForBundle !== task.waitingForBundle) {
+          await updateTaskWaitingForBundle(task.id, editWaitingForBundle);
+        }
+        const nextTarget = editDevTarget === "none" ? null : (editDevTarget as DevTarget);
+        if (nextTarget !== (task.devTarget ?? null)) {
+          await updateTaskDevTarget(task.id, nextTarget);
+        }
+      }
+
       setEditing(false);
       router.refresh();
     } catch (err) {
@@ -596,6 +639,22 @@ export function TaskDetail({
                     </Badge>
                   );
                 })()}
+                {isDevTask && task.devTarget && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
+                  >
+                    {DEV_TARGET_OPTIONS.find((o) => o.value === task.devTarget)?.label ?? task.devTarget}
+                  </Badge>
+                )}
+                {isDevTask && task.waitingForBundle && (
+                  <Badge
+                    variant="secondary"
+                    className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                  >
+                    Waiting for bundle
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -681,7 +740,7 @@ export function TaskDetail({
               {isAdmin && departments.length > 0 && (
                 <div className="space-y-2">
                   <Label>Department</Label>
-                  <Select value={editDepartment} onValueChange={setEditDepartment}>
+                  <Select value={editDepartment} onValueChange={handleEditDepartmentChange}>
                     <SelectTrigger className="w-full sm:w-[280px]">
                       <SelectValue placeholder="Select a department..." />
                     </SelectTrigger>
@@ -694,6 +753,49 @@ export function TaskDetail({
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+
+              {canEditDevFields && isDevSelected && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Bundle</Label>
+                    <Select
+                      value={editWaitingForBundle ? "waiting" : "ready"}
+                      onValueChange={(v) => setEditWaitingForBundle(v === "waiting")}
+                    >
+                      <SelectTrigger className="w-full sm:w-[280px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ready">Ready</SelectItem>
+                        <SelectItem value="waiting">Waiting for bundle</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Marks that the mobile bundle is still pending.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Target</Label>
+                    <Select value={editDevTarget} onValueChange={setEditDevTarget}>
+                      <SelectTrigger className="w-full sm:w-[280px]">
+                        <SelectValue placeholder="Select target..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Not specified</SelectItem>
+                        {DEV_TARGET_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Where this task applies: Task Manager, Web App, Mobile App, or both.
+                    </p>
+                  </div>
                 </div>
               )}
 
