@@ -8,6 +8,8 @@ export type FilterField =
   | "stage"
   | "coord_approval"
   | "dept_approval"
+  | "bundle"
+  | "target"
   | "department"
   | "assignee"
   | "due"
@@ -54,6 +56,8 @@ export type TaskFilterRow = {
   createdAt: Date;
   completedAt: Date | null;
   planningStage: TaskPlanningStage | null;
+  waitingForBundle: boolean;
+  devTarget: "task_manager" | "web_app" | "mobile_app" | "both" | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -70,6 +74,8 @@ export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
   stage: "Stage",
   coord_approval: "Coord.",
   dept_approval: "Dept.",
+  bundle: "Bundle",
+  target: "Target",
   department: "Department",
   assignee: "Assignee",
   due: "Due",
@@ -94,6 +100,8 @@ const ALL_FIELDS: FilterField[] = [
   "stage",
   "coord_approval",
   "dept_approval",
+  "bundle",
+  "target",
   "department",
   "assignee",
   "due",
@@ -109,6 +117,8 @@ const FIELD_OPERATORS: Record<FilterField, FilterOperator[]> = {
   stage: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   coord_approval: ["is_any_of", "is_none_of"],
   dept_approval: ["is_any_of", "is_none_of"],
+  bundle: ["is_any_of", "is_none_of"],
+  target: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   department: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   assignee: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   due: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
@@ -196,9 +206,15 @@ export function createDefaultFilterState(): FilterState {
   return { groups: [createEmptyGroup()] };
 }
 
-export function getFieldsForTab(showStageColumn: boolean): FilterField[] {
-  if (showStageColumn) return ALL_FIELDS;
-  return ALL_FIELDS.filter((field) => field !== "stage");
+export function getFieldsForTab(
+  showStageColumn: boolean,
+  includeDevFields = false
+): FilterField[] {
+  return ALL_FIELDS.filter((field) => {
+    if (field === "stage" && !showStageColumn) return false;
+    if ((field === "bundle" || field === "target") && !includeDevFields) return false;
+    return true;
+  });
 }
 
 export function getOperatorsForField(field: FilterField | null): FilterOperator[] {
@@ -289,6 +305,10 @@ function getTaskFieldValue(task: TaskFilterRow, field: FilterField, context: Fil
       return deriveCoordinatorApproval(task).label;
     case "dept_approval":
       return deriveDeptApproval(task).label;
+    case "bundle":
+      return task.waitingForBundle ? "waiting" : "ready";
+    case "target":
+      return task.devTarget;
     case "department":
       return task.departmentId;
     case "assignee":
@@ -324,6 +344,7 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "assignee") return !task.assignedTo;
     if (rule.field === "due") return !task.dueDate;
     if (rule.field === "stage") return !task.planningStage;
+    if (rule.field === "target") return !task.devTarget;
     return rawValue === null || rawValue === "__unassigned__";
   }
 
@@ -333,6 +354,7 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "assignee") return !!task.assignedTo;
     if (rule.field === "due") return !!task.dueDate;
     if (rule.field === "stage") return !!task.planningStage;
+    if (rule.field === "target") return !!task.devTarget;
     return rawValue !== null && rawValue !== "__unassigned__";
   }
 
@@ -446,4 +468,16 @@ export const CREATED_OPTIONS = [
 export const DONE_OPTIONS = [
   { value: "completed", label: "Completed" },
   { value: "not_completed", label: "Not completed" },
+];
+
+export const BUNDLE_OPTIONS = [
+  { value: "waiting", label: "Waiting for bundle" },
+  { value: "ready", label: "Ready" },
+];
+
+export const TARGET_OPTIONS = [
+  { value: "task_manager", label: "Task Manager" },
+  { value: "web_app", label: "Web App" },
+  { value: "mobile_app", label: "Mobile App" },
+  { value: "both", label: "Both (Web App, Mobile App)" },
 ];

@@ -26,6 +26,7 @@ import {
 import { Copy, ListFilter, Plus, Trash2, X } from "lucide-react";
 import {
   APPROVAL_OPTIONS,
+  BUNDLE_OPTIONS,
   CREATED_OPTIONS,
   DONE_OPTIONS,
   DUE_OPTIONS,
@@ -34,6 +35,7 @@ import {
   PRIORITY_OPTIONS,
   STAGE_OPTIONS,
   STATUS_OPTIONS,
+  TARGET_OPTIONS,
   createEmptyGroup,
   createEmptyRule,
   getDefaultOperatorForField,
@@ -55,6 +57,7 @@ interface TaskFiltersPanelProps {
   filterState: FilterState;
   onFilterStateChange: (state: FilterState) => void;
   showStageColumn: boolean;
+  canEditDevFields?: boolean;
   departments: Option[];
   assignees: Option[];
   creators: Option[];
@@ -157,12 +160,13 @@ export function TaskFiltersPanel({
   filterState,
   onFilterStateChange,
   showStageColumn,
+  canEditDevFields = false,
   departments,
   assignees,
   creators,
   currentUserDepartmentName,
 }: TaskFiltersPanelProps) {
-  const availableFields = getFieldsForTab(showStageColumn);
+  const availableFields = getFieldsForTab(showStageColumn, canEditDevFields);
 
   const displayState = filterState.groups.length > 0 ? filterState : { groups: [createEmptyGroup()] };
 
@@ -194,6 +198,10 @@ export function TaskFiltersPanel({
       case "coord_approval":
       case "dept_approval":
         return APPROVAL_OPTIONS;
+      case "bundle":
+        return BUNDLE_OPTIONS;
+      case "target":
+        return TARGET_OPTIONS;
       case "department":
         return departments;
       case "assignee":
@@ -456,6 +464,8 @@ export function ActiveFilterBadges({
       ...PRIORITY_OPTIONS,
       ...STAGE_OPTIONS,
       ...APPROVAL_OPTIONS,
+      ...BUNDLE_OPTIONS,
+      ...TARGET_OPTIONS,
       ...DUE_OPTIONS,
       ...CREATED_OPTIONS,
       ...DONE_OPTIONS,

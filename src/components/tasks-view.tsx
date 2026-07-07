@@ -259,6 +259,7 @@ function TasksViewContent({
         filterState={filterState.groups.length > 0 ? filterState : createDefaultFilterState()}
         onFilterStateChange={handleFilterStateChange}
         showStageColumn={tab === "planning"}
+        canEditDevFields={canEditDevFields}
         departments={departments}
         assignees={assignees}
         creators={creators}
