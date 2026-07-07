@@ -30,12 +30,14 @@ import {
   CREATED_OPTIONS,
   DONE_OPTIONS,
   DUE_OPTIONS,
+  EFFORT_FILTER_OPTIONS,
   FILTER_FIELD_LABELS,
   FILTER_OPERATOR_LABELS,
   PRIORITY_OPTIONS,
   STAGE_OPTIONS,
   STATUS_OPTIONS,
   TARGET_OPTIONS,
+  VALUE_FILTER_OPTIONS,
   createEmptyGroup,
   createEmptyRule,
   getDefaultOperatorForField,
@@ -202,6 +204,10 @@ export function TaskFiltersPanel({
         return BUNDLE_OPTIONS;
       case "target":
         return TARGET_OPTIONS;
+      case "effort":
+        return EFFORT_FILTER_OPTIONS;
+      case "value":
+        return VALUE_FILTER_OPTIONS;
       case "department":
         return departments;
       case "assignee":
@@ -466,6 +472,8 @@ export function ActiveFilterBadges({
       ...APPROVAL_OPTIONS,
       ...BUNDLE_OPTIONS,
       ...TARGET_OPTIONS,
+      ...EFFORT_FILTER_OPTIONS,
+      ...VALUE_FILTER_OPTIONS,
       ...DUE_OPTIONS,
       ...CREATED_OPTIONS,
       ...DONE_OPTIONS,

@@ -58,6 +58,8 @@ export default async function TasksPage() {
           planningStage: t.planningStage ?? null,
           waitingForBundle: t.waitingForBundle ?? false,
           devTarget: t.devTarget ?? null,
+          effort: t.effort ?? null,
+          value: t.value ?? null,
           creator: t.creator ? { fullName: t.creator.fullName } : null,
           assignee: t.assignee ? { id: t.assignee.id, fullName: t.assignee.fullName } : null,
           department: t.department ? { name: t.department.name } : null,

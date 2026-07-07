@@ -23,7 +23,7 @@ export function DashboardUiStateProvider({ children }: { children: ReactNode }) 
   const [tasksTab, setTasksTab] = useState<TasksTab>("active");
   const [tasksPage, setTasksPage] = useState(1);
   const [taskFilters, setTaskFilters] = useState<FilterState>({ groups: [] });
-  const [tasksViewMode, setTasksViewMode] = useState<TasksViewMode>("list");
+  const [tasksViewMode, setTasksViewMode] = useState<TasksViewMode>("grouped");
 
   const value = useMemo(
     () => ({

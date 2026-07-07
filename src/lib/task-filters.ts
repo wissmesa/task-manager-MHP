@@ -1,5 +1,6 @@
 import type { TaskPriority } from "@/lib/task-priority";
 import type { TaskPlanningStage } from "@/lib/task-planning";
+import { EFFORT_OPTIONS, VALUE_OPTIONS } from "@/lib/task-attributes";
 
 export type FilterField =
   | "title"
@@ -10,6 +11,8 @@ export type FilterField =
   | "dept_approval"
   | "bundle"
   | "target"
+  | "effort"
+  | "value"
   | "department"
   | "assignee"
   | "due"
@@ -58,6 +61,8 @@ export type TaskFilterRow = {
   planningStage: TaskPlanningStage | null;
   waitingForBundle: boolean;
   devTarget: "task_manager" | "web_app" | "mobile_app" | "both" | null;
+  effort: "low" | "mid_low" | "mid_high" | "high" | null;
+  value: "anyone" | "specialist" | "senior" | "highest" | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -76,6 +81,8 @@ export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
   dept_approval: "Dept.",
   bundle: "Bundle",
   target: "Target",
+  effort: "Effort",
+  value: "Value",
   department: "Department",
   assignee: "Assignee",
   due: "Due",
@@ -102,6 +109,8 @@ const ALL_FIELDS: FilterField[] = [
   "dept_approval",
   "bundle",
   "target",
+  "effort",
+  "value",
   "department",
   "assignee",
   "due",
@@ -119,6 +128,8 @@ const FIELD_OPERATORS: Record<FilterField, FilterOperator[]> = {
   dept_approval: ["is_any_of", "is_none_of"],
   bundle: ["is_any_of", "is_none_of"],
   target: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
+  effort: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
+  value: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   department: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   assignee: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   due: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
@@ -309,6 +320,10 @@ function getTaskFieldValue(task: TaskFilterRow, field: FilterField, context: Fil
       return task.waitingForBundle ? "waiting" : "ready";
     case "target":
       return task.devTarget;
+    case "effort":
+      return task.effort;
+    case "value":
+      return task.value;
     case "department":
       return task.departmentId;
     case "assignee":
@@ -345,6 +360,8 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "due") return !task.dueDate;
     if (rule.field === "stage") return !task.planningStage;
     if (rule.field === "target") return !task.devTarget;
+    if (rule.field === "effort") return !task.effort;
+    if (rule.field === "value") return !task.value;
     return rawValue === null || rawValue === "__unassigned__";
   }
 
@@ -355,6 +372,8 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "due") return !!task.dueDate;
     if (rule.field === "stage") return !!task.planningStage;
     if (rule.field === "target") return !!task.devTarget;
+    if (rule.field === "effort") return !!task.effort;
+    if (rule.field === "value") return !!task.value;
     return rawValue !== null && rawValue !== "__unassigned__";
   }
 
@@ -481,3 +500,6 @@ export const TARGET_OPTIONS = [
   { value: "mobile_app", label: "Mobile App" },
   { value: "both", label: "Both (Web App, Mobile App)" },
 ];
+
+export const EFFORT_FILTER_OPTIONS = EFFORT_OPTIONS;
+export const VALUE_FILTER_OPTIONS = VALUE_OPTIONS;

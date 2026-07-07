@@ -12,6 +12,12 @@ import {
   PRIORITY_LABELS,
   type TaskPriority,
 } from "@/lib/task-priority";
+import {
+  TASK_EFFORTS,
+  TASK_VALUES,
+  type TaskEffort,
+  type TaskValue,
+} from "@/lib/task-attributes";
 
 const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
 const ADMIN_EMAIL = "luis@bluepaperclip.com";
@@ -321,6 +327,68 @@ export async function updateTaskDevTarget(taskId: string, devTarget: DevTarget |
   await db
     .update(tasks)
     .set({ devTarget, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+/** Shared authorization used by editable task attributes (effort, value). */
+async function assertCanEditTaskAttributes(taskId: string) {
+  const user = await requireAuth();
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, assignedTo: true, departmentId: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
+
+  if (!allowed && task.departmentId) {
+    const dept = await db.query.departments.findFirst({
+      where: eq(departments.id, task.departmentId),
+      columns: { bossId: true },
+    });
+    if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    const creatorBossId = await getBossForUser(task.createdBy);
+    if (creatorBossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    throw new Error("You don't have permission to edit this task");
+  }
+}
+
+export async function updateTaskEffort(taskId: string, effort: TaskEffort | null) {
+  if (effort !== null && !TASK_EFFORTS.includes(effort)) {
+    throw new Error("Invalid effort value");
+  }
+
+  await assertCanEditTaskAttributes(taskId);
+
+  await db
+    .update(tasks)
+    .set({ effort, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+export async function updateTaskValue(taskId: string, value: TaskValue | null) {
+  if (value !== null && !TASK_VALUES.includes(value)) {
+    throw new Error("Invalid value");
+  }
+
+  await assertCanEditTaskAttributes(taskId);
+
+  await db
+    .update(tasks)
+    .set({ value, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
 
   revalidatePath("/tasks");

@@ -71,6 +71,8 @@ export default async function TaskDetailPage({
           planningStage: task.planningStage ?? null,
           waitingForBundle: task.waitingForBundle ?? false,
           devTarget: task.devTarget ?? null,
+          effort: task.effort ?? null,
+          value: task.value ?? null,
           creator: task.creator
             ? { fullName: task.creator.fullName, email: task.creator.email }
             : null,

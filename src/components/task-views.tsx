@@ -22,6 +22,13 @@ import {
   PLANNING_STAGE_LABELS,
   type TaskPlanningStage,
 } from "@/lib/task-planning";
+import {
+  EFFORT_COLORS,
+  EFFORT_LABELS,
+  VALUE_COLORS,
+  VALUE_LABELS,
+  VALUE_SHORT_LABELS,
+} from "@/lib/task-attributes";
 import { ChevronDown, ChevronRight, ChevronsRight, ImageIcon, Loader2 } from "lucide-react";
 
 type DevTarget = "task_manager" | "web_app" | "mobile_app" | "both";
@@ -43,6 +50,8 @@ export type TaskViewRow = {
   planningStage: TaskPlanningStage | null;
   waitingForBundle: boolean;
   devTarget: DevTarget | null;
+  effort: "low" | "mid_low" | "mid_high" | "high" | null;
+  value: "anyone" | "specialist" | "senior" | "highest" | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -237,6 +246,21 @@ function KanbanCard({ task }: { task: TaskViewRow }) {
             className="whitespace-normal text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
           >
             {DEV_TARGET_LABELS[task.devTarget]}
+          </Badge>
+        )}
+
+        {task.effort && (
+          <Badge variant="secondary" className={`text-[10px] ${EFFORT_COLORS[task.effort]}`}>
+            {EFFORT_LABELS[task.effort]}
+          </Badge>
+        )}
+        {task.value && (
+          <Badge
+            variant="secondary"
+            title={VALUE_LABELS[task.value]}
+            className={`text-[10px] ${VALUE_COLORS[task.value]}`}
+          >
+            {VALUE_SHORT_LABELS[task.value]}
           </Badge>
         )}
 

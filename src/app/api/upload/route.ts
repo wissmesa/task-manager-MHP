@@ -60,6 +60,20 @@ export async function POST(req: NextRequest) {
       ? (devTargetRaw as (typeof DEV_TARGET_VALUES)[number])
       : null;
 
+  const EFFORT_VALUES = ["low", "mid_low", "mid_high", "high"] as const;
+  const effortRaw = formData.get("effort") as string | null;
+  const effort =
+    effortRaw && EFFORT_VALUES.includes(effortRaw as (typeof EFFORT_VALUES)[number])
+      ? (effortRaw as (typeof EFFORT_VALUES)[number])
+      : null;
+
+  const VALUE_VALUES = ["anyone", "specialist", "senior", "highest"] as const;
+  const valueRaw = formData.get("value") as string | null;
+  const value =
+    valueRaw && VALUE_VALUES.includes(valueRaw as (typeof VALUE_VALUES)[number])
+      ? (valueRaw as (typeof VALUE_VALUES)[number])
+      : null;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenantId: string | null = (session.user as any).tenantId ?? null;
 
@@ -123,6 +137,8 @@ export async function POST(req: NextRequest) {
       dueDate: null,
       planningStage,
       devTarget,
+      effort,
+      value,
       approval: approvalStatus,
       ownBossApproved,
       approvedBy,

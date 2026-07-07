@@ -2,7 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue } from "@/lib/actions";
+import {
+  EFFORT_OPTIONS,
+  EFFORT_COLORS,
+  EFFORT_LABELS,
+  VALUE_OPTIONS,
+  VALUE_COLORS,
+  VALUE_SHORT_LABELS,
+  VALUE_LABELS,
+  type TaskEffort,
+  type TaskValue,
+} from "@/lib/task-attributes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +116,8 @@ interface TaskData {
   planningStage: TaskPlanningStage | null;
   waitingForBundle: boolean;
   devTarget: DevTarget | null;
+  effort: TaskEffort | null;
+  value: TaskValue | null;
   images: TaskImage[];
 }
 
@@ -193,6 +206,8 @@ export function TaskDetail({
   const [editDepartment, setEditDepartment] = useState(task.departmentId || "none");
   const [editWaitingForBundle, setEditWaitingForBundle] = useState(task.waitingForBundle);
   const [editDevTarget, setEditDevTarget] = useState<string>(task.devTarget ?? "none");
+  const [editEffort, setEditEffort] = useState<string>(task.effort ?? "none");
+  const [editValue, setEditValue] = useState<string>(task.value ?? "none");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
 
   const editDeptName = isAdmin
@@ -224,6 +239,8 @@ export function TaskDetail({
     setEditDepartment(task.departmentId || "none");
     setEditWaitingForBundle(task.waitingForBundle);
     setEditDevTarget(task.devTarget ?? "none");
+    setEditEffort(task.effort ?? "none");
+    setEditValue(task.value ?? "none");
     setEditing(false);
   }
 
@@ -249,6 +266,15 @@ export function TaskDetail({
         if (nextTarget !== (task.devTarget ?? null)) {
           await updateTaskDevTarget(task.id, nextTarget);
         }
+      }
+
+      const nextEffort = editEffort === "none" ? null : (editEffort as TaskEffort);
+      if (nextEffort !== (task.effort ?? null)) {
+        await updateTaskEffort(task.id, nextEffort);
+      }
+      const nextValue = editValue === "none" ? null : (editValue as TaskValue);
+      if (nextValue !== (task.value ?? null)) {
+        await updateTaskValue(task.id, nextValue);
       }
 
       setEditing(false);
@@ -655,6 +681,20 @@ export function TaskDetail({
                     Waiting for bundle
                   </Badge>
                 )}
+                {task.effort && (
+                  <Badge variant="secondary" className={EFFORT_COLORS[task.effort]}>
+                    Effort: {EFFORT_LABELS[task.effort]}
+                  </Badge>
+                )}
+                {task.value && (
+                  <Badge
+                    variant="secondary"
+                    className={VALUE_COLORS[task.value]}
+                    title={VALUE_LABELS[task.value]}
+                  >
+                    Value: {VALUE_SHORT_LABELS[task.value]}
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -715,6 +755,42 @@ export function TaskDetail({
                   <p className="text-xs text-muted-foreground">
                     {PRIORITY_DESCRIPTIONS[priority]}
                   </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Effort</Label>
+                  <Select value={editEffort} onValueChange={setEditEffort}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select effort..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {EFFORT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Value</Label>
+                  <Select value={editValue} onValueChange={setEditValue}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select value..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {VALUE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

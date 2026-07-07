@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { TaskTable } from "@/components/task-table";
 import {
   GroupedTaskTables,
@@ -24,7 +25,7 @@ import {
   serializeFilters,
 } from "@/lib/task-filters";
 import type { TaskPriority } from "@/lib/task-priority";
-import { Check, Link2, SlidersHorizontal, X } from "lucide-react";
+import { Check, Link2, Search, SlidersHorizontal, X } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -43,6 +44,8 @@ type TaskRow = {
   planningStage: "draft" | "brainstorming" | "discussed" | null;
   waitingForBundle: boolean;
   devTarget: "task_manager" | "web_app" | "mobile_app" | "both" | null;
+  effort: "low" | "mid_low" | "mid_high" | "high" | null;
+  value: "anyone" | "specialist" | "senior" | "highest" | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -70,6 +73,7 @@ function TasksViewContent({
 }: TasksViewProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [urlSaved, setUrlSaved] = useState(false);
+  const [search, setSearch] = useState("");
   const {
     tasksTab: tab,
     setTasksTab,
@@ -108,13 +112,19 @@ function TasksViewContent({
     [currentUserDepartmentId]
   );
 
+  const searchedTasks = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return tasks;
+    return tasks.filter((task) => task.title.toLowerCase().includes(query));
+  }, [tasks, search]);
+
   const regularTasks = useMemo(
-    () => tasks.filter((task) => !task.planningStage),
-    [tasks]
+    () => searchedTasks.filter((task) => !task.planningStage),
+    [searchedTasks]
   );
   const planningTasks = useMemo(
-    () => tasks.filter((task) => task.planningStage),
-    [tasks]
+    () => searchedTasks.filter((task) => task.planningStage),
+    [searchedTasks]
   );
 
   const filteredRegularTasks = useMemo(
@@ -217,6 +227,20 @@ function TasksViewContent({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:w-64">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setTasksPage(1);
+            }}
+            placeholder="Search tasks..."
+            className="h-9 pl-8"
+          />
+        </div>
+
         <Button variant="outline" size="sm" className="h-9" onClick={openFilters}>
           <SlidersHorizontal className="mr-2 h-4 w-4" />
           All Filters

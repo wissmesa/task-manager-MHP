@@ -27,6 +27,7 @@ import {
   PRIORITY_DESCRIPTIONS,
   type TaskPriority,
 } from "@/lib/task-priority";
+import { EFFORT_OPTIONS, VALUE_OPTIONS } from "@/lib/task-attributes";
 
 interface Department {
   id: string;
@@ -61,6 +62,8 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
   const [assignedTo, setAssignedTo] = useState("unassigned");
   const [planningStage, setPlanningStage] = useState("none");
   const [devTarget, setDevTarget] = useState("none");
+  const [effort, setEffort] = useState("none");
+  const [value, setValue] = useState("none");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDept = departments.find((d) => d.id === departmentId);
@@ -113,6 +116,12 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       }
       if (isDevelopmentDept && devTarget !== "none") {
         formData.set("devTarget", devTarget);
+      }
+      if (effort !== "none") {
+        formData.set("effort", effort);
+      }
+      if (value !== "none") {
+        formData.set("value", value);
       }
 
       images.forEach((img) => formData.append("files", img.file));
@@ -224,6 +233,42 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
               </p>
             </div>
           )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Effort</Label>
+              <Select value={effort} onValueChange={setEffort}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select effort..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not specified</SelectItem>
+                  {EFFORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Value</Label>
+              <Select value={value} onValueChange={setValue}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select value..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not specified</SelectItem>
+                  {VALUE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
           <div className="space-y-2">
             <Label>Planning Stage</Label>

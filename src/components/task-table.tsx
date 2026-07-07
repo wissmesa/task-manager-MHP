@@ -3,7 +3,20 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue } from "@/lib/actions";
+import {
+  TASK_EFFORTS,
+  TASK_VALUES,
+  EFFORT_LABELS,
+  EFFORT_COLORS,
+  EFFORT_ORDER,
+  VALUE_LABELS,
+  VALUE_SHORT_LABELS,
+  VALUE_COLORS,
+  VALUE_ORDER,
+  type TaskEffort,
+  type TaskValue,
+} from "@/lib/task-attributes";
 import {
   TASK_PRIORITIES,
   PRIORITY_LABELS,
@@ -67,6 +80,8 @@ type TaskRow = {
   planningStage: TaskPlanningStage | null;
   waitingForBundle: boolean;
   devTarget: DevTarget | null;
+  effort: TaskEffort | null;
+  value: TaskValue | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -202,6 +217,8 @@ type SortKey =
   | "status"
   | "bundle"
   | "target"
+  | "effort"
+  | "value"
   | "priority"
   | "coord"
   | "dept"
@@ -248,6 +265,10 @@ function getSortValue(task: TaskRow, key: SortKey): string | number | null {
     case "target":
       if (task.department?.name !== DEVELOPMENT_DEPARTMENT || !task.devTarget) return null;
       return DEV_TARGET_ORDER[task.devTarget];
+    case "effort":
+      return task.effort ? EFFORT_ORDER[task.effort] : null;
+    case "value":
+      return task.value ? VALUE_ORDER[task.value] : null;
     case "priority":
       return PRIORITY_ORDER[task.priority] ?? null;
     case "coord":
@@ -412,6 +433,36 @@ export function TaskTable({
     });
   }
 
+  function handleEffortChange(taskId: string, value: string) {
+    const effort = value === "none" ? null : (value as TaskEffort);
+    setSavingCell(`effort-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskEffort(taskId, effort);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update effort:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
+  function handleValueChange(taskId: string, value: string) {
+    const taskValue = value === "none" ? null : (value as TaskValue);
+    setSavingCell(`value-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskValue(taskId, taskValue);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update value:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handleAssigneeChange(taskId: string, newAssignee: string) {
     const assignedTo = newAssignee === "unassigned" ? null : newAssignee;
     setSavingCell(`assignee-${taskId}`);
@@ -514,20 +565,22 @@ export function TaskTable({
                 </>
               )}
               <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
+              <SortableHead label="Effort" sortKey="effort" className="w-[7%]" />
+              <SortableHead label="Value" sortKey="value" className="w-[6%]" />
               <SortableHead label="Coord." sortKey="coord" className="w-[6%]" />
               <SortableHead label="Dept." sortKey="dept" className="w-[6%]" />
-              <SortableHead label="Department" sortKey="department" className="w-[8%]" />
+              <SortableHead label="Department" sortKey="department" className="w-[7%]" />
               <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
               <SortableHead label="Due" sortKey="due" className="w-[7%]" />
-              <SortableHead label="Created" sortKey="created" className="w-[6%]" />
-              <SortableHead label="Done" sortKey="done" className="w-[6%]" />
-              <SortableHead label="By" sortKey="by" className="w-[5%]" />
+              <SortableHead label="Created" sortKey="created" className="w-[5%]" />
+              <SortableHead label="Done" sortKey="done" className="w-[5%]" />
+              <SortableHead label="By" sortKey="by" className="w-[4%]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={(showStageColumn ? 12 : 11) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={(showStageColumn ? 14 : 13) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -819,6 +872,123 @@ export function TaskTable({
                         </div>
                       ) : (
                         <PriorityBadge priority={task.priority} />
+                      )}
+                    </TableCell>
+                    <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                {task.effort ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className={`text-xs ${EFFORT_COLORS[task.effort]} hover:opacity-80 transition-opacity`}
+                                  >
+                                    {EFFORT_LABELS[task.effort]}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground hover:opacity-80 transition-opacity"
+                                  >
+                                    Set effort
+                                  </Badge>
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => handleEffortChange(task.id, "none")}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="text-muted-foreground">None</span>
+                                {!task.effort && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                              {TASK_EFFORTS.map((eff) => (
+                                <DropdownMenuItem
+                                  key={eff}
+                                  onClick={() => handleEffortChange(task.id, eff)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <Badge variant="secondary" className={EFFORT_COLORS[eff]}>
+                                    {EFFORT_LABELS[eff]}
+                                  </Badge>
+                                  {task.effort === eff && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `effort-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.effort ? (
+                        <Badge variant="secondary" className={`text-xs ${EFFORT_COLORS[task.effort]}`}>
+                          {EFFORT_LABELS[task.effort]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                {task.value ? (
+                                  <Badge
+                                    variant="secondary"
+                                    title={VALUE_LABELS[task.value]}
+                                    className={`text-xs ${VALUE_COLORS[task.value]} hover:opacity-80 transition-opacity`}
+                                  >
+                                    {VALUE_SHORT_LABELS[task.value]}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground hover:opacity-80 transition-opacity"
+                                  >
+                                    Set value
+                                  </Badge>
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => handleValueChange(task.id, "none")}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="text-muted-foreground">None</span>
+                                {!task.value && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                              {TASK_VALUES.map((val) => (
+                                <DropdownMenuItem
+                                  key={val}
+                                  onClick={() => handleValueChange(task.id, val)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <span>{VALUE_LABELS[val]}</span>
+                                  {task.value === val && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `value-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.value ? (
+                        <Badge
+                          variant="secondary"
+                          title={VALUE_LABELS[task.value]}
+                          className={`text-xs ${VALUE_COLORS[task.value]}`}
+                        >
+                          {VALUE_SHORT_LABELS[task.value]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell className="px-1.5">
