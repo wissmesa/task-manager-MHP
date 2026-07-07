@@ -98,6 +98,8 @@ export const tasks = pgTable("tm_tasks", {
   approvedAt: timestamp("approved_at"),
   completedAt: timestamp("completed_at"),
   planningStage: taskPlanningStageEnum("planning_stage"),
+  waitingForBundle: boolean("waiting_for_bundle").default(false).notNull(),
+  devTarget: varchar("dev_target").$type<"task_manager" | "web_app" | "mobile_app" | "both">(),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -36,6 +36,8 @@ type TaskRow = {
   createdAt: Date;
   completedAt: Date | null;
   planningStage: "draft" | "brainstorming" | "discussed" | null;
+  waitingForBundle: boolean;
+  devTarget: "task_manager" | "web_app" | "mobile_app" | "both" | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -48,6 +50,7 @@ interface TasksViewProps {
   currentUserDepartmentId: string | null;
   currentUserDepartmentName: string | null;
   isAdmin?: boolean;
+  canEditDevFields?: boolean;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
 }
 
@@ -57,6 +60,7 @@ function TasksViewContent({
   currentUserDepartmentId,
   currentUserDepartmentName,
   isAdmin = false,
+  canEditDevFields = false,
   subordinatesMap,
 }: TasksViewProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -275,6 +279,7 @@ function TasksViewContent({
           <TaskTable
             currentUserId={currentUserId}
             isAdmin={isAdmin}
+            canEditDevFields={canEditDevFields}
             subordinatesMap={subordinatesMap}
             tasks={filteredRegularTasks}
             totalTasks={regularTasks.length}
@@ -287,6 +292,7 @@ function TasksViewContent({
           <TaskTable
             currentUserId={currentUserId}
             isAdmin={isAdmin}
+            canEditDevFields={canEditDevFields}
             subordinatesMap={subordinatesMap}
             tasks={filteredPlanningTasks}
             totalTasks={planningTasks.length}

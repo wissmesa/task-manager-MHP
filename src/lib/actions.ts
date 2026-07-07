@@ -253,6 +253,80 @@ export async function updateTaskPriority(
   revalidatePath(`/tasks/${taskId}`);
 }
 
+async function isDevelopmentMember(userId: string, userEmail: string | null | undefined) {
+  if (userEmail === ADMIN_EMAIL) return true;
+
+  const ud = await db.query.userDepartment.findFirst({
+    where: eq(userDepartment.userId, userId),
+    with: { department: { columns: { name: true } } },
+  });
+
+  return ud?.department?.name === "Development";
+}
+
+export async function updateTaskWaitingForBundle(taskId: string, waitingForBundle: boolean) {
+  const user = await requireAuth();
+
+  const isDev = await isDevelopmentMember(user.id, user.email);
+  if (!isDev) {
+    throw new Error("Only the Development department can change the bundle status");
+  }
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { departmentId: true },
+    with: { department: { columns: { name: true } } },
+  });
+  if (!task) throw new Error("Task not found");
+
+  if (task.department?.name !== "Development") {
+    throw new Error("Bundle status only applies to Development tasks");
+  }
+
+  await db
+    .update(tasks)
+    .set({ waitingForBundle, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+const DEV_TARGET_VALUES = ["task_manager", "web_app", "mobile_app", "both"] as const;
+type DevTarget = (typeof DEV_TARGET_VALUES)[number];
+
+export async function updateTaskDevTarget(taskId: string, devTarget: DevTarget | null) {
+  const user = await requireAuth();
+
+  const isDev = await isDevelopmentMember(user.id, user.email);
+  if (!isDev) {
+    throw new Error("Only the Development department can change the task target");
+  }
+
+  if (devTarget !== null && !DEV_TARGET_VALUES.includes(devTarget)) {
+    throw new Error("Invalid task target");
+  }
+
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { departmentId: true },
+    with: { department: { columns: { name: true } } },
+  });
+  if (!task) throw new Error("Task not found");
+
+  if (task.department?.name !== "Development") {
+    throw new Error("Task target only applies to Development tasks");
+  }
+
+  await db
+    .update(tasks)
+    .set({ devTarget, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
 export async function updateTaskPlanningStage(
   taskId: string,
   planningStage: "draft" | "brainstorming" | "discussed" | null

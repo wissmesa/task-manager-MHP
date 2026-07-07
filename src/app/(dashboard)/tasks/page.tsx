@@ -15,6 +15,7 @@ export default async function TasksPage() {
 
   const currentUserId = session?.user?.id ?? "";
   const isAdmin = session?.user?.email === "luis@bluepaperclip.com";
+  const canEditDevFields = isAdmin || userDepartment?.name === "Development";
 
   return (
     <div className="space-y-6">
@@ -38,6 +39,7 @@ export default async function TasksPage() {
         currentUserDepartmentId={userDepartment?.id ?? null}
         currentUserDepartmentName={userDepartment?.name ?? null}
         isAdmin={isAdmin}
+        canEditDevFields={canEditDevFields}
         subordinatesMap={subordinatesMap}
         tasks={tasks.map((t) => ({
           id: t.id,
@@ -54,6 +56,8 @@ export default async function TasksPage() {
           createdAt: t.createdAt,
           completedAt: t.completedAt ?? null,
           planningStage: t.planningStage ?? null,
+          waitingForBundle: t.waitingForBundle ?? false,
+          devTarget: t.devTarget ?? null,
           creator: t.creator ? { fullName: t.creator.fullName } : null,
           assignee: t.assignee ? { id: t.assignee.id, fullName: t.assignee.fullName } : null,
           department: t.department ? { name: t.department.name } : null,

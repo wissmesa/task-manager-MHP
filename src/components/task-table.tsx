@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget } from "@/lib/actions";
 import {
   TASK_PRIORITIES,
   PRIORITY_LABELS,
@@ -65,6 +65,8 @@ type TaskRow = {
   createdAt: Date;
   completedAt: Date | null;
   planningStage: TaskPlanningStage | null;
+  waitingForBundle: boolean;
+  devTarget: DevTarget | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -76,11 +78,32 @@ interface TaskTableProps {
   totalTasks: number;
   currentUserId: string;
   isAdmin?: boolean;
+  canEditDevFields?: boolean;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
   page: number;
   onPageChange: (page: number) => void;
   showStageColumn?: boolean;
 }
+
+const DEVELOPMENT_DEPARTMENT = "Development";
+
+type DevTarget = "task_manager" | "web_app" | "mobile_app" | "both";
+
+const DEV_TARGETS: DevTarget[] = ["task_manager", "web_app", "mobile_app", "both"];
+
+const DEV_TARGET_LABELS: Record<DevTarget, string> = {
+  task_manager: "Task Manager",
+  web_app: "Web App",
+  mobile_app: "Mobile App",
+  both: "Both (Web App, Mobile App)",
+};
+
+const DEV_TARGET_ORDER: Record<DevTarget, number> = {
+  task_manager: 0,
+  web_app: 1,
+  mobile_app: 2,
+  both: 3,
+};
 
 const planningStageLabels = PLANNING_STAGE_LABELS;
 const planningStageColors = PLANNING_STAGE_COLORS;
@@ -177,6 +200,8 @@ type SortKey =
   | "title"
   | "stage"
   | "status"
+  | "bundle"
+  | "target"
   | "priority"
   | "coord"
   | "dept"
@@ -217,6 +242,12 @@ function getSortValue(task: TaskRow, key: SortKey): string | number | null {
       return task.planningStage ? STAGE_ORDER[task.planningStage] : null;
     case "status":
       return STATUS_ORDER[task.status] ?? null;
+    case "bundle":
+      if (task.department?.name !== DEVELOPMENT_DEPARTMENT) return null;
+      return task.waitingForBundle ? 0 : 1;
+    case "target":
+      if (task.department?.name !== DEVELOPMENT_DEPARTMENT || !task.devTarget) return null;
+      return DEV_TARGET_ORDER[task.devTarget];
     case "priority":
       return PRIORITY_ORDER[task.priority] ?? null;
     case "coord":
@@ -245,6 +276,7 @@ export function TaskTable({
   totalTasks,
   currentUserId,
   isAdmin = false,
+  canEditDevFields = false,
   subordinatesMap,
   page,
   onPageChange,
@@ -351,6 +383,35 @@ export function TaskTable({
     });
   }
 
+  function handleBundleChange(taskId: string, waiting: boolean) {
+    setSavingCell(`bundle-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskWaitingForBundle(taskId, waiting);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update bundle status:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
+  function handleDevTargetChange(taskId: string, value: string) {
+    const devTarget = value === "none" ? null : (value as DevTarget);
+    setSavingCell(`target-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskDevTarget(taskId, devTarget);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update target:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handleAssigneeChange(taskId: string, newAssignee: string) {
     const assignedTo = newAssignee === "unassigned" ? null : newAssignee;
     setSavingCell(`assignee-${taskId}`);
@@ -443,24 +504,30 @@ export function TaskTable({
         <Table containerClassName="overflow-x-hidden" className="table-fixed w-full text-xs sm:text-sm">
           <TableHeader>
             <TableRow>
-              <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[24%]" : "w-[31%]"} />
+              <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[15%]" : "w-[22%]"} />
               {showStageColumn && <SortableHead label="Stage" sortKey="stage" className="w-[7%]" />}
               <SortableHead label="Status" sortKey="status" className="w-[8%]" />
+              {canEditDevFields && (
+                <>
+                  <SortableHead label="Bundle" sortKey="bundle" className="w-[7%]" />
+                  <SortableHead label="Target" sortKey="target" className="w-[8%]" />
+                </>
+              )}
               <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
-              <SortableHead label="Coord." sortKey="coord" className="w-[7%]" />
-              <SortableHead label="Dept." sortKey="dept" className="w-[7%]" />
-              <SortableHead label="Department" sortKey="department" className="w-[10%]" />
+              <SortableHead label="Coord." sortKey="coord" className="w-[6%]" />
+              <SortableHead label="Dept." sortKey="dept" className="w-[6%]" />
+              <SortableHead label="Department" sortKey="department" className="w-[8%]" />
               <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
               <SortableHead label="Due" sortKey="due" className="w-[7%]" />
-              <SortableHead label="Created" sortKey="created" className="w-[7%]" />
-              <SortableHead label="Done" sortKey="done" className="w-[7%]" />
+              <SortableHead label="Created" sortKey="created" className="w-[6%]" />
+              <SortableHead label="Done" sortKey="done" className="w-[6%]" />
               <SortableHead label="By" sortKey="by" className="w-[5%]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={showStageColumn ? 12 : 11} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={(showStageColumn ? 12 : 11) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -480,6 +547,9 @@ export function TaskTable({
                   (isAdmin || task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
                 const canEditDueDate =
                   isAdmin || task.assignedTo === currentUserId || isBossOfTaskDept;
+                const isDevTask = task.department?.name === DEVELOPMENT_DEPARTMENT;
+                const canToggleBundle = canEditDevFields && isDevTask;
+                const canSetTarget = canEditDevFields && isDevTask;
                 const subs = task.departmentId
                   ? subordinatesMap[task.departmentId] ?? []
                   : [];
@@ -609,6 +679,111 @@ export function TaskTable({
                         </Badge>
                       )}
                     </TableCell>
+                    {canEditDevFields && (
+                    <>
+                    <TableCell className="px-1.5" onClick={(e) => canToggleBundle && e.stopPropagation()}>
+                      {!isDevTask ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : canToggleBundle ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="cursor-pointer"
+                            onClick={() => handleBundleChange(task.id, !task.waitingForBundle)}
+                            title={
+                              task.waitingForBundle
+                                ? "Waiting for mobile bundle — click to mark ready"
+                                : "Mark as waiting for mobile bundle"
+                            }
+                          >
+                            <Badge
+                              variant="secondary"
+                              className={`text-xs transition-opacity hover:opacity-80 ${
+                                task.waitingForBundle
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              {task.waitingForBundle ? "Waiting" : "Ready"}
+                            </Badge>
+                          </button>
+                          {savingCell === `bundle-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.waitingForBundle ? (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                        >
+                          Waiting
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">Ready</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-1.5" onClick={(e) => canSetTarget && e.stopPropagation()}>
+                      {!isDevTask ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : canSetTarget ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                {task.devTarget ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 hover:opacity-80 transition-opacity"
+                                  >
+                                    {DEV_TARGET_LABELS[task.devTarget]}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground hover:opacity-80 transition-opacity"
+                                  >
+                                    Set target
+                                  </Badge>
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => handleDevTargetChange(task.id, "none")}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="text-muted-foreground">None</span>
+                                {!task.devTarget && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                              {DEV_TARGETS.map((target) => (
+                                <DropdownMenuItem
+                                  key={target}
+                                  onClick={() => handleDevTargetChange(task.id, target)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <span>{DEV_TARGET_LABELS[target]}</span>
+                                  {task.devTarget === target && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `target-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.devTarget ? (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
+                        >
+                          {DEV_TARGET_LABELS[task.devTarget]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    </>
+                    )}
                     <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
                       {canEditStatus ? (
                         <div className="flex items-center gap-1">

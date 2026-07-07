@@ -223,6 +223,16 @@ async function migrate() {
     ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS planning_stage tm_task_planning_stage;
   `;
 
+  console.log("Adding waiting_for_bundle column to tm_tasks...");
+  await sql`
+    ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS waiting_for_bundle BOOLEAN NOT NULL DEFAULT false;
+  `;
+
+  console.log("Adding dev_target column to tm_tasks...");
+  await sql`
+    ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS dev_target VARCHAR;
+  `;
+
   console.log("Migration complete!");
 }
 
