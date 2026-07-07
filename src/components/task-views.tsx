@@ -234,7 +234,7 @@ function KanbanCard({ task }: { task: TaskViewRow }) {
         {task.department?.name === "Development" && task.devTarget && (
           <Badge
             variant="secondary"
-            className="text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
+            className="whitespace-normal text-[10px] bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
           >
             {DEV_TARGET_LABELS[task.devTarget]}
           </Badge>

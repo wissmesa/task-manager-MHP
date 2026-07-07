@@ -504,13 +504,13 @@ export function TaskTable({
         <Table containerClassName="overflow-x-hidden" className="table-fixed w-full text-xs sm:text-sm">
           <TableHeader>
             <TableRow>
-              <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[15%]" : "w-[22%]"} />
+              <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[13%]" : "w-[18%]"} />
               {showStageColumn && <SortableHead label="Stage" sortKey="stage" className="w-[7%]" />}
               <SortableHead label="Status" sortKey="status" className="w-[8%]" />
               {canEditDevFields && (
                 <>
                   <SortableHead label="Bundle" sortKey="bundle" className="w-[7%]" />
-                  <SortableHead label="Target" sortKey="target" className="w-[8%]" />
+                  <SortableHead label="Target" sortKey="target" className="w-[11%]" />
                 </>
               )}
               <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
@@ -733,7 +733,7 @@ export function TaskTable({
                                 {task.devTarget ? (
                                   <Badge
                                     variant="secondary"
-                                    className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 hover:opacity-80 transition-opacity"
+                                    className="max-w-full whitespace-normal text-left leading-tight text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 hover:opacity-80 transition-opacity"
                                   >
                                     {DEV_TARGET_LABELS[task.devTarget]}
                                   </Badge>
@@ -774,7 +774,7 @@ export function TaskTable({
                       ) : task.devTarget ? (
                         <Badge
                           variant="secondary"
-                          className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
+                          className="max-w-full whitespace-normal text-left leading-tight text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400"
                         >
                           {DEV_TARGET_LABELS[task.devTarget]}
                         </Badge>
