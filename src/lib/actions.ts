@@ -101,16 +101,27 @@ export async function getSubordinatesForBossDepts() {
   const session = await auth();
   if (!session?.user) return {};
 
-  const bossDepts = await db
-    .select({ id: departments.id })
-    .from(departments)
-    .where(eq(departments.bossId, session.user.id));
+  // Executive members and the admin can reassign across every department, so
+  // they get the member list of all departments. Bosses get only their own.
+  const myDept = await db.query.userDepartment.findFirst({
+    where: eq(userDepartment.userId, session.user.id),
+    with: { department: { columns: { name: true } } },
+  });
+  const isExecutive = myDept?.department?.name?.toLowerCase() === "executive";
+  const canReassignAll = isExecutive || session.user.email === ADMIN_EMAIL;
 
-  if (bossDepts.length === 0) return {};
+  const targetDepts = canReassignAll
+    ? await db.select({ id: departments.id }).from(departments)
+    : await db
+        .select({ id: departments.id })
+        .from(departments)
+        .where(eq(departments.bossId, session.user.id));
+
+  if (targetDepts.length === 0) return {};
 
   const result: Record<string, { id: string; fullName: string }[]> = {};
 
-  for (const dept of bossDepts) {
+  for (const dept of targetDepts) {
     const members = await db.query.userDepartment.findMany({
       where: eq(userDepartment.departmentId, dept.id),
       with: {
@@ -164,24 +175,7 @@ export async function updateTaskStatus(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
-
-  if (!allowed && task.departmentId) {
-    const dept = await db.query.departments.findFirst({
-      where: eq(departments.id, task.departmentId),
-      columns: { bossId: true },
-    });
-    if (dept?.bossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    const creatorBossId = await getBossForUser(task.createdBy);
-    if (creatorBossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    throw new Error("You don't have permission to change this task's status");
-  }
+  // Any authenticated user who can view the task may edit it.
 
   const now = new Date();
   const updateData: Record<string, unknown> = { status, updatedAt: now };
@@ -230,24 +224,7 @@ export async function updateTaskPriority(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
-
-  if (!allowed && task.departmentId) {
-    const dept = await db.query.departments.findFirst({
-      where: eq(departments.id, task.departmentId),
-      columns: { bossId: true },
-    });
-    if (dept?.bossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    const creatorBossId = await getBossForUser(task.createdBy);
-    if (creatorBossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    throw new Error("You don't have permission to change this task's priority");
-  }
+  // Any authenticated user who can view the task may edit it.
 
   await db
     .update(tasks)
@@ -335,34 +312,18 @@ export async function updateTaskDevTarget(taskId: string, devTarget: DevTarget |
   revalidatePath(`/tasks/${taskId}`);
 }
 
-/** Shared authorization used by editable task attributes (effort, value). */
+/**
+ * Shared guard for editable task attributes (effort, value, category).
+ * Any authenticated user who can view the task may edit it.
+ */
 async function assertCanEditTaskAttributes(taskId: string) {
-  const user = await requireAuth();
+  await requireAuth();
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, assignedTo: true, departmentId: true },
+    columns: { id: true },
   });
   if (!task) throw new Error("Task not found");
-
-  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
-
-  if (!allowed && task.departmentId) {
-    const dept = await db.query.departments.findFirst({
-      where: eq(departments.id, task.departmentId),
-      columns: { bossId: true },
-    });
-    if (dept?.bossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    const creatorBossId = await getBossForUser(task.createdBy);
-    if (creatorBossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    throw new Error("You don't have permission to edit this task");
-  }
 }
 
 export async function updateTaskEffort(taskId: string, effort: TaskEffort | null) {
@@ -425,24 +386,7 @@ export async function updateTaskPlanningStage(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = isAdminUser(user) || task.createdBy === user.id || task.assignedTo === user.id;
-
-  if (!allowed && task.departmentId) {
-    const dept = await db.query.departments.findFirst({
-      where: eq(departments.id, task.departmentId),
-      columns: { bossId: true },
-    });
-    if (dept?.bossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    const creatorBossId = await getBossForUser(task.createdBy);
-    if (creatorBossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    throw new Error("You don't have permission to change this task's stage");
-  }
+  // Any authenticated user who can view the task may edit it.
 
   await db
     .update(tasks)
@@ -465,7 +409,8 @@ export async function updateTaskAssignee(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = isAdminUser(user) || task.createdBy === user.id;
+  // Reassignment is restricted to department bosses, Executive members and admin.
+  let allowed = isAdminUser(user);
 
   if (!allowed && task.departmentId) {
     const dept = await db.query.departments.findFirst({
@@ -473,6 +418,14 @@ export async function updateTaskAssignee(
       columns: { bossId: true },
     });
     if (dept?.bossId === user.id) allowed = true;
+  }
+
+  if (!allowed) {
+    const ud = await db.query.userDepartment.findFirst({
+      where: eq(userDepartment.userId, user.id),
+      with: { department: { columns: { name: true } } },
+    });
+    if (ud?.department?.name?.toLowerCase() === "executive") allowed = true;
   }
 
   if (!allowed) {
@@ -533,19 +486,8 @@ export async function updateTask(
   });
   if (!task) throw new Error("Task not found");
 
-  let allowed = isAdminUser(user) || task.createdBy === user.id;
-
-  if (!allowed && task.departmentId) {
-    const dept = await db.query.departments.findFirst({
-      where: eq(departments.id, task.departmentId),
-      columns: { bossId: true },
-    });
-    if (dept?.bossId === user.id) allowed = true;
-  }
-
-  if (!allowed) {
-    throw new Error("You don't have permission to edit this task");
-  }
+  // Any authenticated user who can view the task may edit it.
+  // (Changing the department stays admin-only — enforced below.)
 
   const now = new Date();
   const updatePayload: Record<string, unknown> = {

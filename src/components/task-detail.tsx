@@ -192,7 +192,9 @@ export function TaskDetail({
 }: TaskDetailProps) {
   const router = useRouter();
   const isOwner = currentUserId === task.createdBy;
-  const canEdit = isOwner || isBossOfDepartment || isAdmin;
+  // Any user who can view this task may edit it. Deletion stays restricted.
+  const canEdit = true;
+  const canDelete = isOwner || isBossOfDepartment || isAdmin;
   const isDevTask = task.departmentName === "Development";
 
   const [editing, setEditing] = useState(false);
@@ -325,14 +327,9 @@ export function TaskDetail({
   }
 
   const canAssign = isBossOfDepartment && task.approval === "approved" && !task.assignedTo;
-  const canEditDueDate =
-    currentUserId === task.assignedTo || isBossOfDepartment || isAdmin;
-  const canEditStage =
-    isOwner ||
-    isBossOfCreator ||
-    isBossOfDepartment ||
-    isAdmin ||
-    currentUserId === task.assignedTo;
+  // Any user who can view this task may edit these fields.
+  const canEditDueDate = true;
+  const canEditStage = true;
 
   function handleDueDateChange(value: string) {
     startUpdatingDueDate(async () => {
@@ -367,26 +364,30 @@ export function TaskDetail({
           </Link>
         </Button>
 
-        {canEdit && !editing && (
+        {!editing && (canEdit || canDelete) && (
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Pencil className="mr-1 h-4 w-4" />
-              Edit
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
-              onClick={handleDelete}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-1 h-4 w-4" />
-              )}
-              Delete
-            </Button>
+            {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Pencil className="mr-1 h-4 w-4" />
+                Edit
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1 h-4 w-4" />
+                )}
+                Delete
+              </Button>
+            )}
           </div>
         )}
       </div>

@@ -611,20 +611,12 @@ export function TaskTable({
               </TableRow>
             ) : (
               paginatedTasks.map((task) => {
-                const isBossOfTaskDept =
-                  !!task.departmentId && !!subordinatesMap[task.departmentId];
-                const isBossOfCreatorDept =
-                  !!task.creatorDeptId && !!subordinatesMap[task.creatorDeptId];
-                const canEditStatus =
-                  isAdmin ||
-                  task.createdBy === currentUserId ||
-                  task.assignedTo === currentUserId ||
-                  isBossOfTaskDept ||
-                  isBossOfCreatorDept;
-                const canEditAssignee =
-                  (isAdmin || task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
-                const canEditDueDate =
-                  isAdmin || task.assignedTo === currentUserId || isBossOfTaskDept;
+                // Any user who can view a task may edit it.
+                const canEditStatus = true;
+                const canEditDueDate = true;
+                // Reassignment still needs the department's member list, which is
+                // only available to that department's boss (and admins).
+                const canEditAssignee = !!task.departmentId;
                 const isDevTask = task.department?.name === DEVELOPMENT_DEPARTMENT;
                 const canToggleBundle = canEditDevFields && isDevTask;
                 const canSetTarget = canEditDevFields && isDevTask;
