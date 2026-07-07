@@ -81,6 +81,12 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!departmentId || departmentId === "none") {
+      alert("Debes seleccionar un departamento para crear la tarea");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -89,9 +95,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       formData.set("description", (e.currentTarget.elements.namedItem("description") as HTMLTextAreaElement).value);
       formData.set("priority", priority);
 
-      if (departmentId && departmentId !== "none") {
-        formData.set("departmentId", departmentId);
-      }
+      formData.set("departmentId", departmentId);
       if (assignedTo && assignedTo !== "unassigned") {
         formData.set("assignedTo", assignedTo);
       }
@@ -171,13 +175,12 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
             </div>
 
             <div className="space-y-2">
-              <Label>Department</Label>
+              <Label>Department *</Label>
               <Select value={departmentId} onValueChange={(v) => { setDepartmentId(v); setAssignedTo("unassigned"); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select department..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No department</SelectItem>
                   {departments.map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}

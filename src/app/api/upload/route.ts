@@ -39,6 +39,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid priority" }, { status: 400 });
   }
 
+  if (!departmentId?.trim()) {
+    return NextResponse.json({ error: "Department is required" }, { status: 400 });
+  }
+
+  const departmentExists = await db.query.departments.findFirst({
+    where: eq(departments.id, departmentId.trim()),
+    columns: { id: true },
+  });
+  if (!departmentExists) {
+    return NextResponse.json({ error: "Invalid department" }, { status: 400 });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenantId: string | null = (session.user as any).tenantId ?? null;
 
