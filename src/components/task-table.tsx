@@ -104,6 +104,7 @@ interface TaskTableProps {
   page: number;
   onPageChange: (page: number) => void;
   showStageColumn?: boolean;
+  hideStatusColumn?: boolean;
 }
 
 const DEVELOPMENT_DEPARTMENT = "Development";
@@ -311,6 +312,7 @@ export function TaskTable({
   page,
   onPageChange,
   showStageColumn = false,
+  hideStatusColumn = false,
 }: TaskTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -581,7 +583,7 @@ export function TaskTable({
             <TableRow>
               <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[13%]" : "w-[18%]"} />
               {showStageColumn && <SortableHead label="Stage" sortKey="stage" className="w-[7%]" />}
-              <SortableHead label="Status" sortKey="status" className="w-[8%]" />
+              {!hideStatusColumn && <SortableHead label="Status" sortKey="status" className="w-[8%]" />}
               {canEditDevFields && (
                 <>
                   <SortableHead label="Bundle" sortKey="bundle" className="w-[7%]" />
@@ -603,7 +605,7 @@ export function TaskTable({
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={(showStageColumn ? 13 : 12) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={(showStageColumn ? 13 : 12) + (canEditDevFields ? 2 : 0) - (hideStatusColumn ? 1 : 0)} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -705,6 +707,7 @@ export function TaskTable({
                       )}
                     </TableCell>
                     )}
+                    {!hideStatusColumn && (
                     <TableCell onClick={(e) => canEditStatus && e.stopPropagation()}>
                       {canEditStatus ? (
                         <div className="flex items-center gap-1">
@@ -747,6 +750,7 @@ export function TaskTable({
                         </Badge>
                       )}
                     </TableCell>
+                    )}
                     {canEditDevFields && (
                     <>
                     <TableCell className="px-1.5" onClick={(e) => canToggleBundle && e.stopPropagation()}>

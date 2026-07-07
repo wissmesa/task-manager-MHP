@@ -143,6 +143,7 @@ function PaginatedTaskTable({
       totalTasks={tasks.length}
       page={page}
       onPageChange={setPage}
+      hideStatusColumn
     />
   );
 }

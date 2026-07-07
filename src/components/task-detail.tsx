@@ -159,13 +159,6 @@ const approvalLabels: Record<string, string> = {
   rejected: "Rejected",
 };
 
-const approvalColors: Record<string, string> = {
-  pending_approval: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-  pending_dept_approval: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400",
-  approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
-  rejected: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400",
-};
-
 const planningStageLabels = PLANNING_STAGE_LABELS;
 const planningStageColors = PLANNING_STAGE_COLORS;
 
@@ -599,84 +592,6 @@ export function TaskDetail({
                 {isUpdatingStage && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 )}
-                {(() => {
-                  const bossColor = task.approval === "pending_approval"
-                    ? approvalColors.pending_approval
-                    : task.ownBossApproved
-                      ? approvalColors.approved
-                      : task.approval === "rejected"
-                        ? approvalColors.rejected
-                        : approvalColors.approved;
-                  const bossLabel = task.approval === "pending_approval"
-                    ? "Coordinator: Pending"
-                    : task.ownBossApproved
-                      ? "Coordinator: Approved"
-                      : task.approval === "rejected"
-                        ? "Coordinator: Rejected"
-                        : "Coordinator: Approved";
-                  return (
-                    <Badge variant="secondary" className={bossColor}>
-                      <ShieldCheck className="mr-1 h-3 w-3" />
-                      {bossLabel}
-                    </Badge>
-                  );
-                })()}
-                {task.departmentId && (() => {
-                  const isCrossDept = task.departmentId !== task.creatorDeptId;
-                  let deptColor: string;
-                  let deptLabel: string;
-
-                  if (isCrossDept) {
-                    switch (task.approval) {
-                      case "pending_approval":
-                        deptColor = "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
-                        deptLabel = "Dept: Waiting";
-                        break;
-                      case "pending_dept_approval":
-                        deptColor = approvalColors.pending_dept_approval;
-                        deptLabel = "Dept: Pending";
-                        break;
-                      case "approved":
-                        deptColor = approvalColors.approved;
-                        deptLabel = "Dept: Approved";
-                        break;
-                      case "rejected":
-                        deptColor = task.ownBossApproved
-                          ? approvalColors.rejected
-                          : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400";
-                        deptLabel = task.ownBossApproved ? "Dept: Rejected" : "Dept: Waiting";
-                        break;
-                      default:
-                        deptColor = "bg-slate-50 text-slate-400";
-                        deptLabel = "Dept: N/A";
-                    }
-                  } else {
-                    switch (task.approval) {
-                      case "pending_approval":
-                        deptColor = approvalColors.pending_approval;
-                        deptLabel = "Dept: Pending";
-                        break;
-                      case "approved":
-                        deptColor = approvalColors.approved;
-                        deptLabel = "Dept: Approved";
-                        break;
-                      case "rejected":
-                        deptColor = approvalColors.rejected;
-                        deptLabel = "Dept: Rejected";
-                        break;
-                      default:
-                        deptColor = "bg-slate-50 text-slate-400";
-                        deptLabel = "Dept: N/A";
-                    }
-                  }
-
-                  return (
-                    <Badge variant="secondary" className={deptColor}>
-                      <Building2 className="mr-1 h-3 w-3" />
-                      {deptLabel}
-                    </Badge>
-                  );
-                })()}
                 {isDevTask && task.devTarget && (
                   <Badge
                     variant="secondary"
