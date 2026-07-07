@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +15,11 @@ import {
   applyTaskFilters,
   countActiveRules,
   createDefaultFilterState,
+  parseFilters,
+  serializeFilters,
 } from "@/lib/task-filters";
 import type { TaskPriority } from "@/lib/task-priority";
-import { SlidersHorizontal, X } from "lucide-react";
+import { Check, Link2, SlidersHorizontal, X } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -57,6 +60,7 @@ function TasksViewContent({
   subordinatesMap,
 }: TasksViewProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [urlSaved, setUrlSaved] = useState(false);
   const {
     tasksTab: tab,
     setTasksTab,
@@ -65,6 +69,28 @@ function TasksViewContent({
     taskFilters: filterState,
     setTaskFilters,
   } = useDashboardUiState();
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const didInitFromUrl = useRef(false);
+
+  // On first mount, hydrate filters from the URL so shared/bookmarked links work.
+  useEffect(() => {
+    if (didInitFromUrl.current) return;
+    didInitFromUrl.current = true;
+
+    const encoded = searchParams.get("filters");
+    if (!encoded) return;
+
+    const parsed = parseFilters(encoded);
+    if (parsed.groups.length > 0) {
+      setTaskFilters(parsed);
+      setTasksPage(1);
+    }
+    // Only runs once on mount; provider setters are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filterContext = useMemo(
     () => ({ currentUserDepartmentId }),
@@ -138,6 +164,36 @@ function TasksViewContent({
   function clearFilters() {
     setTaskFilters({ groups: [] });
     setTasksPage(1);
+
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.has("filters")) {
+      params.delete("filters");
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }
+  }
+
+  async function saveFiltersToUrl() {
+    const serialized = serializeFilters(filterState);
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (serialized) params.set("filters", serialized);
+    else params.delete("filters");
+
+    const query = params.toString();
+    const nextUrl = query ? `${pathname}?${query}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+
+    try {
+      if (typeof window !== "undefined" && navigator.clipboard) {
+        await navigator.clipboard.writeText(`${window.location.origin}${nextUrl}`);
+      }
+    } catch {
+      // Clipboard access can fail silently (e.g. no permission); the URL is still updated.
+    }
+
+    setUrlSaved(true);
+    setTimeout(() => setUrlSaved(false), 2500);
   }
 
   function openFilters() {
@@ -159,6 +215,23 @@ function TasksViewContent({
             </Badge>
           )}
         </Button>
+
+        {activeFilterCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9"
+            onClick={saveFiltersToUrl}
+            title="Guarda los filtros en la URL y copia el enlace"
+          >
+            {urlSaved ? (
+              <Check className="mr-1 h-4 w-4 text-green-600" />
+            ) : (
+              <Link2 className="mr-1 h-4 w-4" />
+            )}
+            {urlSaved ? "Link copied!" : "Save to URL"}
+          </Button>
+        )}
 
         {activeFilterCount > 0 && (
           <Button variant="ghost" size="sm" className="h-9" onClick={clearFilters}>
@@ -228,5 +301,9 @@ function TasksViewContent({
 }
 
 export function TasksView(props: TasksViewProps) {
-  return <TasksViewContent {...props} />;
+  return (
+    <Suspense fallback={null}>
+      <TasksViewContent {...props} />
+    </Suspense>
+  );
 }
