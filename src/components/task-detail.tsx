@@ -328,7 +328,6 @@ export function TaskDetail({
 
   const canAssign = isBossOfDepartment && task.approval === "approved" && !task.assignedTo;
   // Any user who can view this task may edit these fields.
-  const canEditDueDate = true;
   const canEditStage = true;
 
   function handleDueDateChange(value: string) {
@@ -540,6 +539,7 @@ export function TaskDetail({
               ) : (
                 <CardTitle className="text-2xl">{task.title}</CardTitle>
               )}
+              {!editing && (
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="secondary" className={statusColors[status]}>
                   {statusLabels[status]}
@@ -713,6 +713,7 @@ export function TaskDetail({
                   </Badge>
                 )}
               </div>
+              )}
             </div>
 
             {editing && (
@@ -737,183 +738,7 @@ export function TaskDetail({
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {editing && (
-            <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Priority</Label>
-                  <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TASK_PRIORITIES.map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {PRIORITY_LABELS[p]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {PRIORITY_DESCRIPTIONS[priority]}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Effort</Label>
-                  <Select value={editEffort} onValueChange={setEditEffort}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select effort..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not specified</SelectItem>
-                      {EFFORT_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Value</Label>
-                  <Select value={editValue} onValueChange={setEditValue}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select value..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Not specified</SelectItem>
-                      {VALUE_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={editCategory} onValueChange={setEditCategory}>
-                  <SelectTrigger className="w-full sm:w-[320px]">
-                    <SelectValue placeholder="Select category..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Not specified</SelectItem>
-                    {CATEGORY_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {subordinates.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Assign To</Label>
-                  <Select value={editAssignee} onValueChange={setEditAssignee}>
-                    <SelectTrigger className="w-full sm:w-[280px]">
-                      <SelectValue placeholder="Select a person..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {subordinates.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.fullName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {isAdmin && departments.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Department</Label>
-                  <Select value={editDepartment} onValueChange={handleEditDepartmentChange}>
-                    <SelectTrigger className="w-full sm:w-[280px]">
-                      <SelectValue placeholder="Select a department..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No department</SelectItem>
-                      {departments.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>
-                          {d.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {canEditDevFields && isDevSelected && (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Bundle</Label>
-                    <Select
-                      value={editWaitingForBundle ? "waiting" : "ready"}
-                      onValueChange={(v) => setEditWaitingForBundle(v === "waiting")}
-                    >
-                      <SelectTrigger className="w-full sm:w-[280px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ready">Ready</SelectItem>
-                        <SelectItem value="waiting">Waiting for bundle</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Marks that the mobile bundle is still pending.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Target</Label>
-                    <Select value={editDevTarget} onValueChange={setEditDevTarget}>
-                      <SelectTrigger className="w-full sm:w-[280px]">
-                        <SelectValue placeholder="Select target..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Not specified</SelectItem>
-                        {DEV_TARGET_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Where this task applies: Task Manager, Web App, Mobile App, or both.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <Separator />
-            </>
-          )}
-
-          <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span>
@@ -934,7 +759,7 @@ export function TaskDetail({
                 })}
               </span>
             </div>
-            {task.departmentName && (
+            {!editing && task.departmentName && (
               <div className="flex items-center gap-2">
                 <Building2 className="h-4 w-4" />
                 <span>{task.departmentName}</span>
@@ -946,33 +771,7 @@ export function TaskDetail({
                 <span>{task.assignee.fullName}</span>
               </div>
             )}
-            {canEditDueDate ? (
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <CalendarClock className="h-4 w-4" />
-                  <Input
-                    type="date"
-                    defaultValue={task.dueDate ? formatDateInputValue(new Date(task.dueDate)) : ""}
-                    min={dueDateMin}
-                    max={dueDateMax}
-                    disabled={isUpdatingDueDate || dueDateWindowExpired}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => handleDueDateChange(e.target.value)}
-                    className="h-8 w-auto text-sm"
-                  />
-                  {isUpdatingDueDate && (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground pl-6">
-                  {dueDateWindowExpired
-                    ? "The due date window for this priority has expired."
-                    : dueDateMax
-                      ? `Select a date by ${new Date(dueDateMax).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (${PRIORITY_DESCRIPTIONS[task.priority]})`
-                      : "No maximum limit for this priority (P3)."}
-                </p>
-              </div>
-            ) : task.dueDate ? (
+            {!editing && task.dueDate && (
               <div className="flex items-center gap-2">
                 <CalendarClock className="h-4 w-4" />
                 <span>
@@ -984,7 +783,7 @@ export function TaskDetail({
                   })}
                 </span>
               </div>
-            ) : null}
+            )}
             {task.completedAt && (
               <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                 <CalendarCheck className="h-4 w-4" />
@@ -1021,6 +820,263 @@ export function TaskDetail({
               </p>
             )}
           </div>
+
+          {editing && (
+            <div className="rounded-xl border bg-muted/20 p-4 sm:p-5">
+              {/* Workflow */}
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Workflow
+              </p>
+              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Priority</Label>
+                  <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TASK_PRIORITIES.map((p) => (
+                        <SelectItem key={p} value={p}>
+                          {PRIORITY_LABELS[p]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {PRIORITY_DESCRIPTIONS[priority]}
+                  </p>
+                </div>
+
+                {canEditStage && (
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-2">
+                      Planning Stage
+                      {isUpdatingStage && (
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      )}
+                    </Label>
+                    <Select
+                      value={task.planningStage ?? "none"}
+                      onValueChange={handlePlanningStageChange}
+                      disabled={isUpdatingStage}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Standard task" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Standard task</SelectItem>
+                        {TASK_PLANNING_STAGES.map((stage) => (
+                          <SelectItem key={stage} value={stage}>
+                            {planningStageLabels[stage]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              <Separator className="my-5" />
+
+              {/* Classification */}
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Classification
+              </p>
+              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>Effort</Label>
+                  <Select value={editEffort} onValueChange={setEditEffort}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select effort..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {EFFORT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Value</Label>
+                  <Select value={editValue} onValueChange={setEditValue}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select value..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {VALUE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Category</Label>
+                  <Select value={editCategory} onValueChange={setEditCategory}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select category..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {CATEGORY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <Separator className="my-5" />
+              {/* Schedule & assignment */}
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Schedule &amp; Assignment
+              </p>
+              <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-2">
+                    Due Date
+                    {isUpdatingDueDate && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                  </Label>
+                  <Input
+                    type="date"
+                    defaultValue={task.dueDate ? formatDateInputValue(new Date(task.dueDate)) : ""}
+                    min={dueDateMin}
+                    max={dueDateMax}
+                    disabled={isUpdatingDueDate || dueDateWindowExpired}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {dueDateWindowExpired
+                      ? "The due date window for this priority has expired."
+                      : dueDateMax
+                        ? `Select a date by ${new Date(dueDateMax).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (${PRIORITY_DESCRIPTIONS[task.priority]})`
+                        : "No maximum limit for this priority (P3)."}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Department</Label>
+                  {isAdmin && departments.length > 0 ? (
+                    <Select value={editDepartment} onValueChange={handleEditDepartmentChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a department..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No department</SelectItem>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>
+                            {d.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={task.departmentName ?? "No department"}
+                      disabled
+                      className="w-full"
+                    />
+                  )}
+                </div>
+
+                {subordinates.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Assign To</Label>
+                    <Select value={editAssignee} onValueChange={setEditAssignee}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a person..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {subordinates.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.fullName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {canEditDevFields && isDevSelected && (
+                <>
+                  <Separator className="my-5" />
+                  {/* Development */}
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Development
+                  </p>
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label>Bundle</Label>
+                      <Select
+                        value={editWaitingForBundle ? "waiting" : "ready"}
+                        onValueChange={(v) => setEditWaitingForBundle(v === "waiting")}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ready">Ready</SelectItem>
+                          <SelectItem value="waiting">Waiting for bundle</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Marks that the mobile bundle is still pending.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label>Target</Label>
+                      <Select value={editDevTarget} onValueChange={setEditDevTarget}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select target..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Not specified</SelectItem>
+                          {DEV_TARGET_OPTIONS.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Where this task applies: Task Manager, Web App, Mobile App, or both.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {task.images.length > 0 && (
             <>
