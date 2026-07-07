@@ -145,6 +145,8 @@ interface TaskDetailProps {
   currentUserId: string;
   isBossOfCreator: boolean;
   isBossOfDepartment: boolean;
+  isAdmin?: boolean;
+  departments?: { id: string; name: string }[];
   subordinates: Subordinate[];
 }
 
@@ -153,11 +155,13 @@ export function TaskDetail({
   currentUserId,
   isBossOfCreator,
   isBossOfDepartment,
+  isAdmin = false,
+  departments = [],
   subordinates,
 }: TaskDetailProps) {
   const router = useRouter();
   const isOwner = currentUserId === task.createdBy;
-  const canEdit = isOwner || isBossOfDepartment;
+  const canEdit = isOwner || isBossOfDepartment || isAdmin;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -172,6 +176,7 @@ export function TaskDetail({
   const [status, setStatus] = useState(task.status);
   const [priority, setPriority] = useState(task.priority);
   const [editAssignee, setEditAssignee] = useState(task.assignedTo || "unassigned");
+  const [editDepartment, setEditDepartment] = useState(task.departmentId || "none");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
 
   const dueDateLimits = getDueDateLimits(task.priority, task.createdAt);
@@ -186,6 +191,7 @@ export function TaskDetail({
     setStatus(task.status);
     setPriority(task.priority);
     setEditAssignee(task.assignedTo || "unassigned");
+    setEditDepartment(task.departmentId || "none");
     setEditing(false);
   }
 
@@ -198,6 +204,9 @@ export function TaskDetail({
         priority,
         status,
         assignedTo: editAssignee === "unassigned" ? null : editAssignee,
+        ...(isAdmin
+          ? { departmentId: editDepartment === "none" ? null : editDepartment }
+          : {}),
       });
       setEditing(false);
       router.refresh();
@@ -237,11 +246,12 @@ export function TaskDetail({
 
   const canAssign = isBossOfDepartment && task.approval === "approved" && !task.assignedTo;
   const canEditDueDate =
-    currentUserId === task.assignedTo || isBossOfDepartment;
+    currentUserId === task.assignedTo || isBossOfDepartment || isAdmin;
   const canEditStage =
     isOwner ||
     isBossOfCreator ||
     isBossOfDepartment ||
+    isAdmin ||
     currentUserId === task.assignedTo;
 
   function handleDueDateChange(value: string) {
@@ -661,6 +671,25 @@ export function TaskDetail({
                       {subordinates.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {u.fullName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {isAdmin && departments.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Department</Label>
+                  <Select value={editDepartment} onValueChange={setEditDepartment}>
+                    <SelectTrigger className="w-full sm:w-[280px]">
+                      <SelectValue placeholder="Select a department..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No department</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>
+                          {d.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

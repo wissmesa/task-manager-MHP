@@ -174,6 +174,11 @@ async function migrate() {
     INSERT INTO tm_departments (name) VALUES ('Executive') ON CONFLICT (name) DO NOTHING;
   `;
 
+  console.log("Seeding Data department...");
+  await sql`
+    INSERT INTO tm_departments (name) VALUES ('Data') ON CONFLICT (name) DO NOTHING;
+  `;
+
   console.log("Migrating task priority enum to P0-P3...");
   await sql`
     ALTER TABLE tm_tasks ALTER COLUMN priority DROP DEFAULT;

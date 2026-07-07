@@ -48,7 +48,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Loader2, Check, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -73,8 +73,12 @@ type TaskRow = {
 
 interface TaskTableProps {
   tasks: TaskRow[];
+  totalTasks: number;
   currentUserId: string;
+  isAdmin?: boolean;
   subordinatesMap: Record<string, { id: string; fullName: string }[]>;
+  page: number;
+  onPageChange: (page: number) => void;
   showStageColumn?: boolean;
 }
 
@@ -169,34 +173,119 @@ function deriveDeptApproval(task: TaskRow): ApprovalBadge {
   }
 }
 
+type SortKey =
+  | "title"
+  | "stage"
+  | "status"
+  | "priority"
+  | "coord"
+  | "dept"
+  | "department"
+  | "assignee"
+  | "due"
+  | "created"
+  | "done"
+  | "by";
+
+type SortState = { key: SortKey; dir: "asc" | "desc" };
+
+const STATUS_ORDER: Record<string, number> = {
+  pending: 0,
+  in_progress: 1,
+  completed: 2,
+  cancelled: 3,
+};
+
+const PRIORITY_ORDER: Record<string, number> = {
+  P0: 0,
+  P1: 1,
+  P2: 2,
+  P3: 3,
+};
+
+const STAGE_ORDER: Record<string, number> = {
+  draft: 0,
+  brainstorming: 1,
+  discussed: 2,
+};
+
+function getSortValue(task: TaskRow, key: SortKey): string | number | null {
+  switch (key) {
+    case "title":
+      return task.title?.toLowerCase() ?? null;
+    case "stage":
+      return task.planningStage ? STAGE_ORDER[task.planningStage] : null;
+    case "status":
+      return STATUS_ORDER[task.status] ?? null;
+    case "priority":
+      return PRIORITY_ORDER[task.priority] ?? null;
+    case "coord":
+      return deriveCoordinatorApproval(task).label;
+    case "dept":
+      return deriveDeptApproval(task).label;
+    case "department":
+      return task.department?.name?.toLowerCase() ?? null;
+    case "assignee":
+      return task.assignee?.fullName.toLowerCase() ?? null;
+    case "due":
+      return task.dueDate ? new Date(task.dueDate).getTime() : null;
+    case "created":
+      return new Date(task.createdAt).getTime();
+    case "done":
+      return task.completedAt ? new Date(task.completedAt).getTime() : null;
+    case "by":
+      return task.creator?.fullName.toLowerCase() ?? null;
+    default:
+      return null;
+  }
+}
+
 export function TaskTable({
   tasks,
+  totalTasks,
   currentUserId,
+  isAdmin = false,
   subordinatesMap,
+  page,
+  onPageChange,
   showStageColumn = false,
 }: TaskTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [personFilter, setPersonFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
   const [savingCell, setSavingCell] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState | null>(null);
 
   const PAGE_SIZE = 20;
 
-  const people = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of tasks) {
-      if (t.creator) map.set(t.createdBy, t.creator.fullName);
-      if (t.assignee) map.set(t.assignee.id, t.assignee.fullName);
-    }
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [tasks]);
+  function toggleSort(key: SortKey) {
+    setSort((prev) => {
+      if (prev?.key === key) {
+        return { key, dir: prev.dir === "asc" ? "desc" : "asc" };
+      }
+      return { key, dir: "asc" };
+    });
+    onPageChange(1);
+  }
+
+  const sortedTasks = useMemo(() => {
+    if (!sort) return tasks;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...tasks].sort((a, b) => {
+      const av = getSortValue(a, sort.key);
+      const bv = getSortValue(b, sort.key);
+      const aNull = av === null || av === undefined || av === "";
+      const bNull = bv === null || bv === undefined || bv === "";
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv));
+      return dir * cmp;
+    });
+  }, [tasks, sort]);
 
   function handleRowClick(taskId: string) {
     setLoadingId(taskId);
@@ -277,36 +366,41 @@ export function TaskTable({
     });
   }
 
-  const filtered = useMemo(() => {
-    const query = searchQuery.toLowerCase().trim();
-    return tasks.filter((t) => {
-      if (statusFilter !== "all" && t.status !== statusFilter) return false;
-      if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-      if (personFilter !== "all") {
-        const matchesCreator = t.createdBy === personFilter;
-        const matchesAssignee = t.assignedTo === personFilter;
-        if (!matchesCreator && !matchesAssignee) return false;
-      }
-      if (query) {
-        const titleMatch = t.title.toLowerCase().includes(query);
-        const creatorMatch = t.creator?.fullName.toLowerCase().includes(query);
-        const assigneeMatch = t.assignee?.fullName.toLowerCase().includes(query);
-        const deptMatch = t.department?.name.toLowerCase().includes(query);
-        if (!titleMatch && !creatorMatch && !assigneeMatch && !deptMatch) return false;
-      }
-      return true;
-    });
-  }, [tasks, statusFilter, priorityFilter, personFilter, searchQuery]);
+  const totalPages = Math.max(1, Math.ceil(sortedTasks.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginatedTasks = sortedTasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(currentPage, totalPages);
-  const paginatedTasks = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  function handleFilterChange<T>(setter: (v: T) => void) {
-    return (value: T) => {
-      setter(value);
-      setCurrentPage(1);
-    };
+  function SortableHead({
+    label,
+    sortKey,
+    className,
+  }: {
+    label: string;
+    sortKey: SortKey;
+    className?: string;
+  }) {
+    const active = sort?.key === sortKey;
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          onClick={() => toggleSort(sortKey)}
+          className="group inline-flex w-full items-center gap-1 hover:text-foreground"
+          title={`Sort by ${label}`}
+        >
+          <span className="truncate">{label}</span>
+          {active ? (
+            sort?.dir === "asc" ? (
+              <ArrowUp className="h-3 w-3 shrink-0" />
+            ) : (
+              <ArrowDown className="h-3 w-3 shrink-0" />
+            )
+          ) : (
+            <ArrowUpDown className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-50" />
+          )}
+        </button>
+      </TableHead>
+    );
   }
 
   function formatShortDate(date: Date) {
@@ -345,78 +439,22 @@ export function TaskTable({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1 max-w-md">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="pl-9"
-          />
-        </div>
-
-        <Select value={statusFilter} onValueChange={handleFilterChange(setStatusFilter)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={priorityFilter} onValueChange={handleFilterChange(setPriorityFilter)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            {TASK_PRIORITIES.map((p) => (
-              <SelectItem key={p} value={p}>
-                {PRIORITY_LABELS[p]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={personFilter} onValueChange={handleFilterChange(setPersonFilter)}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Person" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All People</SelectItem>
-            {people.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="rounded-lg border overflow-hidden">
         <Table containerClassName="overflow-x-hidden" className="table-fixed w-full text-xs sm:text-sm">
           <TableHeader>
             <TableRow>
-              <TableHead className={showStageColumn ? "w-[24%]" : "w-[31%]"}>Title</TableHead>
-              {showStageColumn && <TableHead className="w-[7%]">Stage</TableHead>}
-              <TableHead className="w-[8%]">Status</TableHead>
-              <TableHead className="w-[5%]">Pri.</TableHead>
-              <TableHead className="w-[7%]">Coord.</TableHead>
-              <TableHead className="w-[7%]">Dept.</TableHead>
-              <TableHead className="w-[10%]">Department</TableHead>
-              <TableHead className="w-[5%]">Assignee</TableHead>
-              <TableHead className="w-[7%]">Due</TableHead>
-              <TableHead className="w-[7%]">Created</TableHead>
-              <TableHead className="w-[7%]">Done</TableHead>
-              <TableHead className="w-[5%]">By</TableHead>
+              <SortableHead label="Title" sortKey="title" className={showStageColumn ? "w-[24%]" : "w-[31%]"} />
+              {showStageColumn && <SortableHead label="Stage" sortKey="stage" className="w-[7%]" />}
+              <SortableHead label="Status" sortKey="status" className="w-[8%]" />
+              <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
+              <SortableHead label="Coord." sortKey="coord" className="w-[7%]" />
+              <SortableHead label="Dept." sortKey="dept" className="w-[7%]" />
+              <SortableHead label="Department" sortKey="department" className="w-[10%]" />
+              <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
+              <SortableHead label="Due" sortKey="due" className="w-[7%]" />
+              <SortableHead label="Created" sortKey="created" className="w-[7%]" />
+              <SortableHead label="Done" sortKey="done" className="w-[7%]" />
+              <SortableHead label="By" sortKey="by" className="w-[5%]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -433,14 +471,15 @@ export function TaskTable({
                 const isBossOfCreatorDept =
                   !!task.creatorDeptId && !!subordinatesMap[task.creatorDeptId];
                 const canEditStatus =
+                  isAdmin ||
                   task.createdBy === currentUserId ||
                   task.assignedTo === currentUserId ||
                   isBossOfTaskDept ||
                   isBossOfCreatorDept;
                 const canEditAssignee =
-                  (task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
+                  (isAdmin || task.createdBy === currentUserId || isBossOfTaskDept) && task.departmentId;
                 const canEditDueDate =
-                  task.assignedTo === currentUserId || isBossOfTaskDept;
+                  isAdmin || task.assignedTo === currentUserId || isBossOfTaskDept;
                 const subs = task.departmentId
                   ? subordinatesMap[task.departmentId] ?? []
                   : [];
@@ -775,8 +814,8 @@ export function TaskTable({
 
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          Showing {Math.min((safePage - 1) * PAGE_SIZE + 1, filtered.length)}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length} tasks
-          {filtered.length !== tasks.length && ` (${tasks.length} total)`}
+          Showing {tasks.length === 0 ? 0 : Math.min((safePage - 1) * PAGE_SIZE + 1, tasks.length)}–{Math.min(safePage * PAGE_SIZE, tasks.length)} of {tasks.length} tasks
+          {tasks.length !== totalTasks && ` (${totalTasks} total)`}
         </p>
 
         {totalPages > 1 && (
@@ -785,7 +824,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage(1)}
+              onClick={() => onPageChange(1)}
               disabled={safePage <= 1}
             >
               <ChevronsLeft className="h-4 w-4" />
@@ -794,7 +833,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => onPageChange(Math.max(1, safePage - 1))}
               disabled={safePage <= 1}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -806,7 +845,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
               disabled={safePage >= totalPages}
             >
               <ChevronRight className="h-4 w-4" />
@@ -815,7 +854,7 @@ export function TaskTable({
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => setCurrentPage(totalPages)}
+              onClick={() => onPageChange(totalPages)}
               disabled={safePage >= totalPages}
             >
               <ChevronsRight className="h-4 w-4" />
