@@ -74,6 +74,25 @@ export async function POST(req: NextRequest) {
       ? (valueRaw as (typeof VALUE_VALUES)[number])
       : null;
 
+  const CATEGORY_VALUES = [
+    "ceo_strategy",
+    "b2b_acquisition",
+    "product_engineering",
+    "b2c_sales_leasing",
+    "data_reporting",
+    "hr_people_culture",
+    "finance_legal",
+    "partnerships_integrations",
+    "office_environment",
+    "personal_inner_game",
+    "family_life_ops",
+  ] as const;
+  const categoryRaw = formData.get("category") as string | null;
+  const category =
+    categoryRaw && CATEGORY_VALUES.includes(categoryRaw as (typeof CATEGORY_VALUES)[number])
+      ? (categoryRaw as (typeof CATEGORY_VALUES)[number])
+      : null;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenantId: string | null = (session.user as any).tenantId ?? null;
 
@@ -139,6 +158,7 @@ export async function POST(req: NextRequest) {
       devTarget,
       effort,
       value,
+      category,
       approval: approvalStatus,
       ownBossApproved,
       approvedBy,

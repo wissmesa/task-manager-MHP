@@ -73,6 +73,7 @@ export default async function TaskDetailPage({
           devTarget: task.devTarget ?? null,
           effort: task.effort ?? null,
           value: task.value ?? null,
+          category: task.category ?? null,
           creator: task.creator
             ? { fullName: task.creator.fullName, email: task.creator.email }
             : null,

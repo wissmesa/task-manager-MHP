@@ -27,6 +27,7 @@ import { Copy, ListFilter, Plus, Trash2, X } from "lucide-react";
 import {
   APPROVAL_OPTIONS,
   BUNDLE_OPTIONS,
+  CATEGORY_FILTER_OPTIONS,
   CREATED_OPTIONS,
   DONE_OPTIONS,
   DUE_OPTIONS,
@@ -208,6 +209,8 @@ export function TaskFiltersPanel({
         return EFFORT_FILTER_OPTIONS;
       case "value":
         return VALUE_FILTER_OPTIONS;
+      case "category":
+        return CATEGORY_FILTER_OPTIONS;
       case "department":
         return departments;
       case "assignee":
@@ -474,6 +477,7 @@ export function ActiveFilterBadges({
       ...TARGET_OPTIONS,
       ...EFFORT_FILTER_OPTIONS,
       ...VALUE_FILTER_OPTIONS,
+      ...CATEGORY_FILTER_OPTIONS,
       ...DUE_OPTIONS,
       ...CREATED_OPTIONS,
       ...DONE_OPTIONS,

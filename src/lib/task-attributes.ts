@@ -64,3 +64,61 @@ export const VALUE_OPTIONS = TASK_VALUES.map((value) => ({
   value,
   label: VALUE_LABELS[value],
 }));
+
+// Category — "Client" categories (C–F) are intentionally excluded.
+export type TaskCategory =
+  | "ceo_strategy"
+  | "b2b_acquisition"
+  | "product_engineering"
+  | "b2c_sales_leasing"
+  | "data_reporting"
+  | "hr_people_culture"
+  | "finance_legal"
+  | "partnerships_integrations"
+  | "office_environment"
+  | "personal_inner_game"
+  | "family_life_ops";
+
+export const TASK_CATEGORIES: TaskCategory[] = [
+  "ceo_strategy",
+  "b2b_acquisition",
+  "product_engineering",
+  "b2c_sales_leasing",
+  "data_reporting",
+  "hr_people_culture",
+  "finance_legal",
+  "partnerships_integrations",
+  "office_environment",
+  "personal_inner_game",
+  "family_life_ops",
+];
+
+export const CATEGORY_LABELS: Record<TaskCategory, string> = {
+  ceo_strategy: "CEO / Strategy",
+  b2b_acquisition: "New Client Acquisition (B2B)",
+  product_engineering: "Product & Engineering",
+  b2c_sales_leasing: "B2C Sales & Leasing Ops",
+  data_reporting: "Data & Reporting",
+  hr_people_culture: "HR / People / Culture",
+  finance_legal: "Finance & Legal",
+  partnerships_integrations: "Partnerships & Integrations",
+  office_environment: "Office / Environment",
+  personal_inner_game: "Personal / Inner Game",
+  family_life_ops: "Family & Life Ops",
+};
+
+export const CATEGORY_COLOR =
+  "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400";
+
+export const CATEGORY_ORDER: Record<TaskCategory, number> = TASK_CATEGORIES.reduce(
+  (acc, cat, index) => {
+    acc[cat] = index;
+    return acc;
+  },
+  {} as Record<TaskCategory, number>
+);
+
+export const CATEGORY_OPTIONS = TASK_CATEGORIES.map((value) => ({
+  value,
+  label: CATEGORY_LABELS[value],
+}));

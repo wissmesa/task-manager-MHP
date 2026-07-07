@@ -1,6 +1,6 @@
 import type { TaskPriority } from "@/lib/task-priority";
 import type { TaskPlanningStage } from "@/lib/task-planning";
-import { EFFORT_OPTIONS, VALUE_OPTIONS } from "@/lib/task-attributes";
+import { EFFORT_OPTIONS, VALUE_OPTIONS, CATEGORY_OPTIONS } from "@/lib/task-attributes";
 
 export type FilterField =
   | "title"
@@ -13,6 +13,7 @@ export type FilterField =
   | "target"
   | "effort"
   | "value"
+  | "category"
   | "department"
   | "assignee"
   | "due"
@@ -63,6 +64,19 @@ export type TaskFilterRow = {
   devTarget: "task_manager" | "web_app" | "mobile_app" | "both" | null;
   effort: "low" | "mid_low" | "mid_high" | "high" | null;
   value: "anyone" | "specialist" | "senior" | "highest" | null;
+  category:
+    | "ceo_strategy"
+    | "b2b_acquisition"
+    | "product_engineering"
+    | "b2c_sales_leasing"
+    | "data_reporting"
+    | "hr_people_culture"
+    | "finance_legal"
+    | "partnerships_integrations"
+    | "office_environment"
+    | "personal_inner_game"
+    | "family_life_ops"
+    | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -83,6 +97,7 @@ export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
   target: "Target",
   effort: "Effort",
   value: "Value",
+  category: "Category",
   department: "Department",
   assignee: "Assignee",
   due: "Due",
@@ -111,6 +126,7 @@ const ALL_FIELDS: FilterField[] = [
   "target",
   "effort",
   "value",
+  "category",
   "department",
   "assignee",
   "due",
@@ -130,6 +146,7 @@ const FIELD_OPERATORS: Record<FilterField, FilterOperator[]> = {
   target: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   effort: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   value: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
+  category: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   department: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   assignee: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   due: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
@@ -324,6 +341,8 @@ function getTaskFieldValue(task: TaskFilterRow, field: FilterField, context: Fil
       return task.effort;
     case "value":
       return task.value;
+    case "category":
+      return task.category;
     case "department":
       return task.departmentId;
     case "assignee":
@@ -362,6 +381,7 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "target") return !task.devTarget;
     if (rule.field === "effort") return !task.effort;
     if (rule.field === "value") return !task.value;
+    if (rule.field === "category") return !task.category;
     return rawValue === null || rawValue === "__unassigned__";
   }
 
@@ -374,6 +394,7 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "target") return !!task.devTarget;
     if (rule.field === "effort") return !!task.effort;
     if (rule.field === "value") return !!task.value;
+    if (rule.field === "category") return !!task.category;
     return rawValue !== null && rawValue !== "__unassigned__";
   }
 
@@ -503,3 +524,4 @@ export const TARGET_OPTIONS = [
 
 export const EFFORT_FILTER_OPTIONS = EFFORT_OPTIONS;
 export const VALUE_FILTER_OPTIONS = VALUE_OPTIONS;
+export const CATEGORY_FILTER_OPTIONS = CATEGORY_OPTIONS;

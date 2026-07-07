@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory } from "@/lib/actions";
 import {
   EFFORT_OPTIONS,
   EFFORT_COLORS,
@@ -11,8 +11,12 @@ import {
   VALUE_COLORS,
   VALUE_SHORT_LABELS,
   VALUE_LABELS,
+  CATEGORY_OPTIONS,
+  CATEGORY_COLOR,
+  CATEGORY_LABELS,
   type TaskEffort,
   type TaskValue,
+  type TaskCategory,
 } from "@/lib/task-attributes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -118,6 +122,7 @@ interface TaskData {
   devTarget: DevTarget | null;
   effort: TaskEffort | null;
   value: TaskValue | null;
+  category: TaskCategory | null;
   images: TaskImage[];
 }
 
@@ -208,6 +213,7 @@ export function TaskDetail({
   const [editDevTarget, setEditDevTarget] = useState<string>(task.devTarget ?? "none");
   const [editEffort, setEditEffort] = useState<string>(task.effort ?? "none");
   const [editValue, setEditValue] = useState<string>(task.value ?? "none");
+  const [editCategory, setEditCategory] = useState<string>(task.category ?? "none");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
 
   const editDeptName = isAdmin
@@ -241,6 +247,7 @@ export function TaskDetail({
     setEditDevTarget(task.devTarget ?? "none");
     setEditEffort(task.effort ?? "none");
     setEditValue(task.value ?? "none");
+    setEditCategory(task.category ?? "none");
     setEditing(false);
   }
 
@@ -275,6 +282,10 @@ export function TaskDetail({
       const nextValue = editValue === "none" ? null : (editValue as TaskValue);
       if (nextValue !== (task.value ?? null)) {
         await updateTaskValue(task.id, nextValue);
+      }
+      const nextCategory = editCategory === "none" ? null : (editCategory as TaskCategory);
+      if (nextCategory !== (task.category ?? null)) {
+        await updateTaskCategory(task.id, nextCategory);
       }
 
       setEditing(false);
@@ -695,6 +706,11 @@ export function TaskDetail({
                     Value: {VALUE_SHORT_LABELS[task.value]}
                   </Badge>
                 )}
+                {task.category && (
+                  <Badge variant="secondary" className={CATEGORY_COLOR}>
+                    {CATEGORY_LABELS[task.category]}
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -792,6 +808,23 @@ export function TaskDetail({
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={editCategory} onValueChange={setEditCategory}>
+                  <SelectTrigger className="w-full sm:w-[320px]">
+                    <SelectValue placeholder="Select category..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Not specified</SelectItem>
+                    {CATEGORY_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {subordinates.length > 0 && (

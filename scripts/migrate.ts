@@ -243,6 +243,11 @@ async function migrate() {
     ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS value VARCHAR;
   `;
 
+  console.log("Adding category column to tm_tasks...");
+  await sql`
+    ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS category VARCHAR;
+  `;
+
   console.log("Migration complete!");
 }
 

@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory } from "@/lib/actions";
 import {
   TASK_EFFORTS,
   TASK_VALUES,
+  TASK_CATEGORIES,
   EFFORT_LABELS,
   EFFORT_COLORS,
   EFFORT_ORDER,
@@ -14,8 +15,12 @@ import {
   VALUE_SHORT_LABELS,
   VALUE_COLORS,
   VALUE_ORDER,
+  CATEGORY_LABELS,
+  CATEGORY_COLOR,
+  CATEGORY_ORDER,
   type TaskEffort,
   type TaskValue,
+  type TaskCategory,
 } from "@/lib/task-attributes";
 import {
   TASK_PRIORITIES,
@@ -82,6 +87,7 @@ type TaskRow = {
   devTarget: DevTarget | null;
   effort: TaskEffort | null;
   value: TaskValue | null;
+  category: TaskCategory | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -219,6 +225,7 @@ type SortKey =
   | "target"
   | "effort"
   | "value"
+  | "category"
   | "priority"
   | "coord"
   | "dept"
@@ -269,6 +276,8 @@ function getSortValue(task: TaskRow, key: SortKey): string | number | null {
       return task.effort ? EFFORT_ORDER[task.effort] : null;
     case "value":
       return task.value ? VALUE_ORDER[task.value] : null;
+    case "category":
+      return task.category ? CATEGORY_ORDER[task.category] : null;
     case "priority":
       return PRIORITY_ORDER[task.priority] ?? null;
     case "coord":
@@ -463,6 +472,21 @@ export function TaskTable({
     });
   }
 
+  function handleCategoryChange(taskId: string, value: string) {
+    const category = value === "none" ? null : (value as TaskCategory);
+    setSavingCell(`category-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskCategory(taskId, category);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update category:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handleAssigneeChange(taskId: string, newAssignee: string) {
     const assignedTo = newAssignee === "unassigned" ? null : newAssignee;
     setSavingCell(`assignee-${taskId}`);
@@ -567,6 +591,7 @@ export function TaskTable({
               <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
               <SortableHead label="Effort" sortKey="effort" className="w-[7%]" />
               <SortableHead label="Value" sortKey="value" className="w-[6%]" />
+              <SortableHead label="Category" sortKey="category" className="w-[10%]" />
               <SortableHead label="Coord." sortKey="coord" className="w-[6%]" />
               <SortableHead label="Dept." sortKey="dept" className="w-[6%]" />
               <SortableHead label="Department" sortKey="department" className="w-[7%]" />
@@ -580,7 +605,7 @@ export function TaskTable({
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={(showStageColumn ? 14 : 13) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={(showStageColumn ? 15 : 14) + (canEditDevFields ? 2 : 0)} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -986,6 +1011,66 @@ export function TaskTable({
                           className={`text-xs ${VALUE_COLORS[task.value]}`}
                         >
                           {VALUE_SHORT_LABELS[task.value]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                {task.category ? (
+                                  <Badge
+                                    variant="secondary"
+                                    title={CATEGORY_LABELS[task.category]}
+                                    className={`max-w-full whitespace-normal text-left leading-tight text-xs ${CATEGORY_COLOR} hover:opacity-80 transition-opacity`}
+                                  >
+                                    {CATEGORY_LABELS[task.category]}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground hover:opacity-80 transition-opacity"
+                                  >
+                                    Set cat.
+                                  </Badge>
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => handleCategoryChange(task.id, "none")}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="text-muted-foreground">None</span>
+                                {!task.category && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                              {TASK_CATEGORIES.map((cat) => (
+                                <DropdownMenuItem
+                                  key={cat}
+                                  onClick={() => handleCategoryChange(task.id, cat)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <span>{CATEGORY_LABELS[cat]}</span>
+                                  {task.category === cat && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `category-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.category ? (
+                        <Badge
+                          variant="secondary"
+                          title={CATEGORY_LABELS[task.category]}
+                          className={`max-w-full whitespace-normal text-left leading-tight text-xs ${CATEGORY_COLOR}`}
+                        >
+                          {CATEGORY_LABELS[task.category]}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>

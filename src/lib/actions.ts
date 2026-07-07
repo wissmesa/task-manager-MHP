@@ -15,8 +15,10 @@ import {
 import {
   TASK_EFFORTS,
   TASK_VALUES,
+  TASK_CATEGORIES,
   type TaskEffort,
   type TaskValue,
+  type TaskCategory,
 } from "@/lib/task-attributes";
 
 const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
@@ -389,6 +391,22 @@ export async function updateTaskValue(taskId: string, value: TaskValue | null) {
   await db
     .update(tasks)
     .set({ value, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+export async function updateTaskCategory(taskId: string, category: TaskCategory | null) {
+  if (category !== null && !TASK_CATEGORIES.includes(category)) {
+    throw new Error("Invalid category");
+  }
+
+  await assertCanEditTaskAttributes(taskId);
+
+  await db
+    .update(tasks)
+    .set({ category, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
 
   revalidatePath("/tasks");

@@ -102,6 +102,19 @@ export const tasks = pgTable("tm_tasks", {
   devTarget: varchar("dev_target").$type<"task_manager" | "web_app" | "mobile_app" | "both">(),
   effort: varchar("effort").$type<"low" | "mid_low" | "mid_high" | "high">(),
   value: varchar("value").$type<"anyone" | "specialist" | "senior" | "highest">(),
+  category: varchar("category").$type<
+    | "ceo_strategy"
+    | "b2b_acquisition"
+    | "product_engineering"
+    | "b2c_sales_leasing"
+    | "data_reporting"
+    | "hr_people_culture"
+    | "finance_legal"
+    | "partnerships_integrations"
+    | "office_environment"
+    | "personal_inner_game"
+    | "family_life_ops"
+  >(),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

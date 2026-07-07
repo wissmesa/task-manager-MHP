@@ -46,6 +46,19 @@ type TaskRow = {
   devTarget: "task_manager" | "web_app" | "mobile_app" | "both" | null;
   effort: "low" | "mid_low" | "mid_high" | "high" | null;
   value: "anyone" | "specialist" | "senior" | "highest" | null;
+  category:
+    | "ceo_strategy"
+    | "b2b_acquisition"
+    | "product_engineering"
+    | "b2c_sales_leasing"
+    | "data_reporting"
+    | "hr_people_culture"
+    | "finance_legal"
+    | "partnerships_integrations"
+    | "office_environment"
+    | "personal_inner_game"
+    | "family_life_ops"
+    | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
