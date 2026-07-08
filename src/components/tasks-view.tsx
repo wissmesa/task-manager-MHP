@@ -326,7 +326,12 @@ function TasksViewContent({
 
         <TabsContent value="active">
           {viewMode === "kanban" ? (
-            <KanbanBoard tasks={filteredRegularTasks} />
+            <KanbanBoard
+              tasks={filteredRegularTasks}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              subordinatesMap={subordinatesMap}
+            />
           ) : viewMode === "grouped" ? (
             <GroupedTaskTables
               currentUserId={currentUserId}
@@ -351,7 +356,12 @@ function TasksViewContent({
 
         <TabsContent value="planning">
           {viewMode === "kanban" ? (
-            <KanbanBoard tasks={filteredPlanningTasks} />
+            <KanbanBoard
+              tasks={filteredPlanningTasks}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              subordinatesMap={subordinatesMap}
+            />
           ) : viewMode === "grouped" ? (
             <GroupedTaskTables
               currentUserId={currentUserId}

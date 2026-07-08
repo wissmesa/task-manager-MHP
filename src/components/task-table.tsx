@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory, deleteTask } from "@/lib/actions";
 import {
   TASK_EFFORTS,
   TASK_VALUES,
@@ -66,7 +66,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, ArrowUpDown, ArrowRightLeft } from "lucide-react";
+import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, ArrowUpDown, ArrowRightLeft, Trash2 } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -374,6 +374,23 @@ export function TaskTable({
     });
   }
 
+  function handleDeleteTask(taskId: string) {
+    if (!confirm("Are you sure you want to delete this task? This action cannot be undone.")) {
+      return;
+    }
+    setSavingCell(`delete-${taskId}`);
+    startTransition(async () => {
+      try {
+        await deleteTask(taskId);
+        router.refresh();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Failed to delete task");
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handlePriorityChange(taskId: string, newPriority: string) {
     setSavingCell(`priority-${taskId}`);
     startTransition(async () => {
@@ -625,6 +642,13 @@ export function TaskTable({
                 const subs = task.departmentId
                   ? subordinatesMap[task.departmentId] ?? []
                   : [];
+                // Deletion mirrors the server rule: admin, task owner, or the
+                // boss of the task's department (subordinatesMap is keyed by the
+                // departments the current user is boss of).
+                const canDeleteTask =
+                  isAdmin ||
+                  task.createdBy === currentUserId ||
+                  (!!task.departmentId && subordinatesMap[task.departmentId] != null);
 
                 return (
                   <TableRow
@@ -680,6 +704,22 @@ export function TaskTable({
                             <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
                           )}
                         </Link>
+                        {canDeleteTask && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTask(task.id);
+                            }}
+                            className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
+                            title="Delete task"
+                          >
+                            {savingCell === `delete-${task.id}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        )}
                       </div>
                     </TableCell>
                     {showStageColumn && (

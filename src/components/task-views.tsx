@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TaskTable } from "@/components/task-table";
-import { updateTaskStatus } from "@/lib/actions";
+import { updateTaskStatus, deleteTask } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -33,7 +33,7 @@ import {
   CATEGORY_LABELS,
   type TaskCategory,
 } from "@/lib/task-attributes";
-import { ChevronDown, ChevronRight, ChevronsRight, ImageIcon, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronsRight, ImageIcon, Loader2, Trash2 } from "lucide-react";
 
 type DevTarget = "task_manager" | "web_app" | "mobile_app" | "both";
 
@@ -203,12 +203,18 @@ function KanbanCard({
   onDragEnd,
   isDragging,
   isMoving,
+  canDelete,
+  isDeleting,
+  onDelete,
 }: {
   task: TaskViewRow;
   onDragStart: (taskId: string) => void;
   onDragEnd: () => void;
   isDragging: boolean;
   isMoving: boolean;
+  canDelete: boolean;
+  isDeleting: boolean;
+  onDelete: (taskId: string) => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -228,9 +234,9 @@ function KanbanCard({
         onDragStart(task.id);
       }}
       onDragEnd={onDragEnd}
-      className={`w-full cursor-grab rounded-lg border bg-background p-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
+      className={`group w-full cursor-grab rounded-lg border bg-background p-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
         isDragging ? "opacity-40" : ""
-      } ${isMoving ? "pointer-events-none opacity-60" : ""}`}
+      } ${isMoving || isDeleting ? "pointer-events-none opacity-60" : ""}`}
     >
       <div className="flex items-start gap-2">
         <span className="min-w-0 flex-1 text-sm font-medium leading-snug">
@@ -238,6 +244,30 @@ function KanbanCard({
         </span>
         {(isPending || isMoving) && (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+        )}
+        {canDelete && !isMoving && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(task.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                onDelete(task.id);
+              }
+            }}
+            className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-all hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100 dark:hover:bg-rose-950"
+            title="Delete task"
+          >
+            {isDeleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </span>
         )}
       </div>
 
@@ -334,19 +364,57 @@ function KanbanCard({
   );
 }
 
-export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
+export function KanbanBoard({
+  tasks,
+  currentUserId,
+  isAdmin = false,
+  subordinatesMap = {},
+}: {
+  tasks: TaskViewRow[];
+  currentUserId?: string;
+  isAdmin?: boolean;
+  subordinatesMap?: Record<string, { id: string; fullName: string }[]>;
+}) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState<Record<Status, boolean>>(DEFAULT_COLLAPSED);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<Status | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Optimistically hide a deleted card until the server refresh completes.
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
   // Optimistic status overrides so the card jumps to the new column immediately.
   const [overrides, setOverrides] = useState<Record<string, Status>>({});
 
-  const effectiveTasks = tasks.map((t) =>
-    overrides[t.id] ? { ...t, status: overrides[t.id] } : t
-  );
+  const effectiveTasks = tasks
+    .filter((t) => !deletedIds.includes(t.id))
+    .map((t) => (overrides[t.id] ? { ...t, status: overrides[t.id] } : t));
   const groups = groupByStatus(effectiveTasks);
+
+  function canDeleteTask(task: TaskViewRow) {
+    return (
+      isAdmin ||
+      task.createdBy === currentUserId ||
+      (!!task.departmentId && subordinatesMap[task.departmentId] != null)
+    );
+  }
+
+  async function deleteTaskById(taskId: string) {
+    if (!confirm("Are you sure you want to delete this task? This action cannot be undone.")) {
+      return;
+    }
+    setDeletingId(taskId);
+    setDeletedIds((prev) => [...prev, taskId]);
+    try {
+      await deleteTask(taskId);
+      router.refresh();
+    } catch (err) {
+      setDeletedIds((prev) => prev.filter((id) => id !== taskId));
+      alert(err instanceof Error ? err.message : "Failed to delete task");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   function toggle(status: Status) {
     setCollapsed((prev) => ({ ...prev, [status]: !prev[status] }));
@@ -478,6 +546,9 @@ export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
                     }}
                     isDragging={draggingId === task.id}
                     isMoving={movingId === task.id}
+                    canDelete={canDeleteTask(task)}
+                    isDeleting={deletingId === task.id}
+                    onDelete={deleteTaskById}
                   />
                 ))
               )}
