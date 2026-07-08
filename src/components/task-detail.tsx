@@ -83,6 +83,7 @@ import {
   PLANNING_STAGE_COLORS,
   type TaskPlanningStage,
 } from "@/lib/task-planning";
+import { TaskDiscussion, type CommentItem, type ActivityItem } from "@/components/task-discussion";
 
 interface TaskImage {
   id: string;
@@ -171,6 +172,8 @@ interface TaskDetailProps {
   canEditDevFields?: boolean;
   departments?: { id: string; name: string }[];
   subordinates: Subordinate[];
+  comments?: CommentItem[];
+  activity?: ActivityItem[];
 }
 
 export function TaskDetail({
@@ -182,6 +185,8 @@ export function TaskDetail({
   canEditDevFields = false,
   departments = [],
   subordinates,
+  comments = [],
+  activity = [],
 }: TaskDetailProps) {
   const router = useRouter();
   const isOwner = currentUserId === task.createdBy;
@@ -1035,6 +1040,16 @@ export function TaskDetail({
           )}
         </CardContent>
       </Card>
+
+      {!editing && (
+        <TaskDiscussion
+          taskId={task.id}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          comments={comments}
+          activity={activity}
+        />
+      )}
     </div>
   );
 }

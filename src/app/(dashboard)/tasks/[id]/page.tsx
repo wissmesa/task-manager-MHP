@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments, getCurrentUserDepartment, getTaskComments, getTaskActivity } from "@/lib/actions";
 import { TaskDetail } from "@/components/task-detail";
-import { TaskDiscussion } from "@/components/task-discussion";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
 
@@ -99,16 +98,10 @@ export default async function TaskDetailPage({
         canEditDevFields={canEditDevFields}
         departments={departments}
         subordinates={subordinates}
-        />
-      </Suspense>
-
-      <TaskDiscussion
-        taskId={task.id}
-        currentUserId={currentUserId}
-        isAdmin={isAdmin}
         comments={comments}
         activity={activity}
-      />
+        />
+      </Suspense>
     </div>
   );
 }
