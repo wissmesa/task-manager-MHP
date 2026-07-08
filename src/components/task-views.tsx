@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { TaskTable } from "@/components/task-table";
+import { updateTaskStatus } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -144,6 +145,7 @@ function PaginatedTaskTable({
       page={page}
       onPageChange={setPage}
       hideStatusColumn
+      showMoveAction
     />
   );
 }
@@ -195,7 +197,19 @@ export function GroupedTaskTables({
   );
 }
 
-function KanbanCard({ task }: { task: TaskViewRow }) {
+function KanbanCard({
+  task,
+  onDragStart,
+  onDragEnd,
+  isDragging,
+  isMoving,
+}: {
+  task: TaskViewRow;
+  onDragStart: (taskId: string) => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
+  isMoving: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -207,13 +221,22 @@ function KanbanCard({ task }: { task: TaskViewRow }) {
     <button
       type="button"
       onClick={open}
-      className="w-full rounded-lg border bg-background p-3 text-left shadow-sm transition-shadow hover:shadow-md"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", task.id);
+        onDragStart(task.id);
+      }}
+      onDragEnd={onDragEnd}
+      className={`w-full cursor-grab rounded-lg border bg-background p-3 text-left shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing ${
+        isDragging ? "opacity-40" : ""
+      } ${isMoving ? "pointer-events-none opacity-60" : ""}`}
     >
       <div className="flex items-start gap-2">
         <span className="min-w-0 flex-1 text-sm font-medium leading-snug">
           <span className="line-clamp-2">{task.title}</span>
         </span>
-        {isPending && (
+        {(isPending || isMoving) && (
           <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
         )}
       </div>
@@ -312,11 +335,49 @@ function KanbanCard({ task }: { task: TaskViewRow }) {
 }
 
 export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
-  const groups = groupByStatus(tasks);
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState<Record<Status, boolean>>(DEFAULT_COLLAPSED);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<Status | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  // Optimistic status overrides so the card jumps to the new column immediately.
+  const [overrides, setOverrides] = useState<Record<string, Status>>({});
+
+  const effectiveTasks = tasks.map((t) =>
+    overrides[t.id] ? { ...t, status: overrides[t.id] } : t
+  );
+  const groups = groupByStatus(effectiveTasks);
 
   function toggle(status: Status) {
     setCollapsed((prev) => ({ ...prev, [status]: !prev[status] }));
+  }
+
+  async function moveTask(taskId: string, target: Status) {
+    const task = effectiveTasks.find((t) => t.id === taskId);
+    if (!task || task.status === target) return;
+
+    setOverrides((prev) => ({ ...prev, [taskId]: target }));
+    setMovingId(taskId);
+    try {
+      await updateTaskStatus(taskId, target);
+      router.refresh();
+    } catch (err) {
+      setOverrides((prev) => {
+        const next = { ...prev };
+        delete next[taskId];
+        return next;
+      });
+      alert(err instanceof Error ? err.message : "Failed to move task");
+    } finally {
+      setMovingId(null);
+    }
+  }
+
+  function handleDrop(status: Status) {
+    const id = draggingId;
+    setDraggingId(null);
+    setDragOver(null);
+    if (id) moveTask(id, status);
   }
 
   return (
@@ -324,6 +385,7 @@ export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
       {STATUS_ORDER.map((status) => {
         const groupTasks = groups[status];
         const isCollapsed = collapsed[status];
+        const isDropTarget = dragOver === status;
 
         if (isCollapsed) {
           return (
@@ -331,8 +393,19 @@ export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
               key={status}
               type="button"
               onClick={() => toggle(status)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(status);
+              }}
+              onDragLeave={() => setDragOver((prev) => (prev === status ? null : prev))}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleDrop(status);
+              }}
               title={`Expand ${STATUS_LABELS[status]}`}
-              className={`flex w-11 shrink-0 flex-col items-center gap-3 rounded-lg border border-t-4 bg-muted/30 py-3 hover:bg-muted/60 ${STATUS_COLUMN_ACCENT[status]}`}
+              className={`flex w-11 shrink-0 flex-col items-center gap-3 rounded-lg border border-t-4 bg-muted/30 py-3 hover:bg-muted/60 ${STATUS_COLUMN_ACCENT[status]} ${
+                isDropTarget ? "ring-2 ring-primary ring-offset-1" : ""
+              }`}
             >
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
               <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
@@ -349,7 +422,23 @@ export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
         return (
           <div
             key={status}
-            className={`flex w-72 shrink-0 flex-col rounded-lg border border-t-4 bg-muted/30 sm:w-80 ${STATUS_COLUMN_ACCENT[status]}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(status);
+            }}
+            onDragLeave={(e) => {
+              // Only clear when leaving the column, not when moving over children.
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setDragOver((prev) => (prev === status ? null : prev));
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              handleDrop(status);
+            }}
+            className={`flex w-72 shrink-0 flex-col rounded-lg border border-t-4 bg-muted/30 sm:w-80 ${STATUS_COLUMN_ACCENT[status]} ${
+              isDropTarget ? "ring-2 ring-primary ring-offset-1" : ""
+            }`}
           >
             <div className="flex items-center gap-2 px-3 py-2.5">
               <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
@@ -370,11 +459,27 @@ export function KanbanBoard({ tasks }: { tasks: TaskViewRow[] }) {
             </div>
             <div className="flex-1 space-y-2 px-2 pb-3">
               {groupTasks.length === 0 ? (
-                <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                  No tasks
+                <p
+                  className={`rounded-md border border-dashed px-1 py-6 text-center text-xs text-muted-foreground ${
+                    isDropTarget ? "border-primary/50 bg-primary/5" : "border-transparent"
+                  }`}
+                >
+                  {isDropTarget ? "Drop here" : "No tasks"}
                 </p>
               ) : (
-                groupTasks.map((task) => <KanbanCard key={task.id} task={task} />)
+                groupTasks.map((task) => (
+                  <KanbanCard
+                    key={task.id}
+                    task={task}
+                    onDragStart={setDraggingId}
+                    onDragEnd={() => {
+                      setDraggingId(null);
+                      setDragOver(null);
+                    }}
+                    isDragging={draggingId === task.id}
+                    isMoving={movingId === task.id}
+                  />
+                ))
               )}
             </div>
           </div>

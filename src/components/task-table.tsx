@@ -66,7 +66,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
+import { ImageIcon, Loader2, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUp, ArrowDown, ArrowUpDown, ArrowRightLeft } from "lucide-react";
 
 type TaskRow = {
   id: string;
@@ -105,6 +105,7 @@ interface TaskTableProps {
   onPageChange: (page: number) => void;
   showStageColumn?: boolean;
   hideStatusColumn?: boolean;
+  showMoveAction?: boolean;
 }
 
 const DEVELOPMENT_DEPARTMENT = "Development";
@@ -313,6 +314,7 @@ export function TaskTable({
   onPageChange,
   showStageColumn = false,
   hideStatusColumn = false,
+  showMoveAction = false,
 }: TaskTableProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -631,19 +633,54 @@ export function TaskTable({
                     onClick={() => handleRowClick(task.id)}
                   >
                     <TableCell className="max-w-0 px-2">
-                      <Link
-                        href={`/tasks/${task.id}`}
-                        onClick={(e) => e.preventDefault()}
-                        className="flex min-w-0 items-center gap-1.5 font-medium hover:underline"
-                      >
-                        {isPending && loadingId === task.id ? (
-                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-                        ) : null}
-                        <span className="truncate">{task.title}</span>
-                        {task.images.length > 0 && (
-                          <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        {showMoveAction && canEditStatus && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                title="Move to another status"
+                              >
+                                {savingCell === `status-${task.id}` ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+                              {(["pending", "in_progress", "completed", "cancelled"] as const)
+                                .filter((s) => s !== task.status)
+                                .map((s) => (
+                                  <DropdownMenuItem
+                                    key={s}
+                                    onClick={() => handleStatusChange(task.id, s)}
+                                    className="gap-2"
+                                  >
+                                    <span className="text-muted-foreground">Move to</span>
+                                    <Badge variant="secondary" className={statusColors[s]}>
+                                      {statusLabels[s]}
+                                    </Badge>
+                                  </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
-                      </Link>
+                        <Link
+                          href={`/tasks/${task.id}`}
+                          onClick={(e) => e.preventDefault()}
+                          className="flex min-w-0 items-center gap-1.5 font-medium hover:underline"
+                        >
+                          {isPending && loadingId === task.id ? (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                          ) : null}
+                          <span className="truncate">{task.title}</span>
+                          {task.images.length > 0 && (
+                            <ImageIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          )}
+                        </Link>
+                      </div>
                     </TableCell>
                     {showStageColumn && (
                     <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
