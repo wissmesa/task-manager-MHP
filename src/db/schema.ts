@@ -4,6 +4,7 @@ import {
   text,
   boolean,
   timestamp,
+  integer,
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -201,6 +202,44 @@ export const taskComments = pgTable("tm_task_comments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const recurringTasks = pgTable("tm_recurring_tasks", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  departmentId: varchar("department_id")
+    .notNull()
+    .references(() => departments.id),
+  createdBy: varchar("created_by")
+    .notNull()
+    .references(() => users.id),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  frequency: varchar("frequency").$type<"daily" | "weekly" | "monthly">().notNull(),
+  // weekly: 0=Sunday .. 6=Saturday (deadline weekday within each week)
+  dueWeekday: integer("due_weekday"),
+  // monthly: 1..31 (deadline day within each month)
+  dueDayOfMonth: integer("due_day_of_month"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const recurringTaskCompletions = pgTable("tm_recurring_task_completions", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  recurringTaskId: varchar("recurring_task_id")
+    .notNull()
+    .references(() => recurringTasks.id, { onDelete: "cascade" }),
+  // 'YYYY-MM-DD' (daily) | 'YYYY-Www' (weekly) | 'YYYY-MM' (monthly)
+  periodKey: varchar("period_key").notNull(),
+  completedBy: varchar("completed_by")
+    .notNull()
+    .references(() => users.id),
+  completedAt: timestamp("completed_at").defaultNow().notNull(),
+});
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
@@ -241,3 +280,27 @@ export const taskCommentsRelations = relations(taskComments, ({ one }) => ({
   task: one(tasks, { fields: [taskComments.taskId], references: [tasks.id] }),
   user: one(users, { fields: [taskComments.userId], references: [users.id] }),
 }));
+
+export const recurringTasksRelations = relations(recurringTasks, ({ one, many }) => ({
+  creator: one(users, { fields: [recurringTasks.createdBy], references: [users.id] }),
+  assignee: one(users, { fields: [recurringTasks.assignedTo], references: [users.id] }),
+  department: one(departments, {
+    fields: [recurringTasks.departmentId],
+    references: [departments.id],
+  }),
+  completions: many(recurringTaskCompletions),
+}));
+
+export const recurringTaskCompletionsRelations = relations(
+  recurringTaskCompletions,
+  ({ one }) => ({
+    recurringTask: one(recurringTasks, {
+      fields: [recurringTaskCompletions.recurringTaskId],
+      references: [recurringTasks.id],
+    }),
+    completedByUser: one(users, {
+      fields: [recurringTaskCompletions.completedBy],
+      references: [users.id],
+    }),
+  })
+);

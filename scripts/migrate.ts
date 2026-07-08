@@ -280,6 +280,42 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS tm_task_comments_task_id_idx ON tm_task_comments(task_id);
   `;
 
+  console.log("Creating tm_recurring_tasks table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_recurring_tasks (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      department_id VARCHAR NOT NULL REFERENCES tm_departments(id),
+      created_by VARCHAR NOT NULL REFERENCES users(id),
+      assigned_to VARCHAR REFERENCES users(id),
+      frequency VARCHAR NOT NULL,
+      due_weekday INTEGER,
+      due_day_of_month INTEGER,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_recurring_tasks_dept_idx ON tm_recurring_tasks(department_id);
+  `;
+
+  console.log("Creating tm_recurring_task_completions table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_recurring_task_completions (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      recurring_task_id VARCHAR NOT NULL REFERENCES tm_recurring_tasks(id) ON DELETE CASCADE,
+      period_key VARCHAR NOT NULL,
+      completed_by VARCHAR NOT NULL REFERENCES users(id),
+      completed_at TIMESTAMP NOT NULL DEFAULT now(),
+      UNIQUE (recurring_task_id, period_key)
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_recurring_completions_task_idx ON tm_recurring_task_completions(recurring_task_id);
+  `;
+
   console.log("Migration complete!");
 }
 
