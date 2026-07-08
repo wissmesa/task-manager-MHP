@@ -1,6 +1,7 @@
 import { Suspense } from "react";
-import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments, getCurrentUserDepartment } from "@/lib/actions";
+import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments, getCurrentUserDepartment, getTaskComments, getTaskActivity } from "@/lib/actions";
 import { TaskDetail } from "@/components/task-detail";
+import { TaskDiscussion } from "@/components/task-discussion";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
 
@@ -44,6 +45,11 @@ export default async function TaskDetailPage({
 
   const viewerDept = await getCurrentUserDepartment();
   const canEditDevFields = isAdmin || viewerDept?.name === "Development";
+
+  const [comments, activity] = await Promise.all([
+    getTaskComments(task.id),
+    getTaskActivity(task.id),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -95,6 +101,14 @@ export default async function TaskDetailPage({
         subordinates={subordinates}
         />
       </Suspense>
+
+      <TaskDiscussion
+        taskId={task.id}
+        currentUserId={currentUserId}
+        isAdmin={isAdmin}
+        comments={comments}
+        activity={activity}
+      />
     </div>
   );
 }

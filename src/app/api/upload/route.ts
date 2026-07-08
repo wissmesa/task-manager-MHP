@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { randomUUID } from "crypto";
 import path from "path";
 import { db } from "@/db";
-import { tasks, taskImages, departments, userDepartment, users } from "@/db/schema";
+import { tasks, taskImages, departments, userDepartment, users, taskActivity } from "@/db/schema";
 import { buildS3Key, uploadToS3 } from "@/lib/s3";
 import { sendTaskCreatedEmail } from "@/lib/mail";
 import { isTaskPriority } from "@/lib/task-priority";
@@ -166,6 +166,13 @@ export async function POST(req: NextRequest) {
       tenantId,
     })
     .returning();
+
+  await db.insert(taskActivity).values({
+    taskId: task.id,
+    userId: session.user.id,
+    action: "created",
+    newValue: "Task created",
+  });
 
   if (files.length > 0) {
     const imageRecords: { taskId: string; imageUrl: string; originalName: string }[] = [];

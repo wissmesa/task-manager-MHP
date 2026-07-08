@@ -44,6 +44,7 @@ import {
   getDefaultOperatorForField,
   getFieldsForTab,
   getOperatorsForField,
+  isRuleActive,
   operatorNeedsValues,
   type FilterField,
   type FilterGroup,
@@ -92,6 +93,28 @@ function FilterValuePicker({
   currentUserDepartmentName: string | null;
 }) {
   if (!operatorNeedsValues(operator)) return null;
+
+  if (operator === "is_between") {
+    return (
+      <div className="flex items-center gap-2">
+        <Input
+          type="date"
+          value={values[0] ?? ""}
+          max={values[1] || undefined}
+          onChange={(e) => onChange([e.target.value, values[1] ?? ""])}
+          className="h-9"
+        />
+        <span className="shrink-0 text-xs text-muted-foreground">to</span>
+        <Input
+          type="date"
+          value={values[1] ?? ""}
+          min={values[0] || undefined}
+          onChange={(e) => onChange([values[0] ?? "", e.target.value])}
+          className="h-9"
+        />
+      </div>
+    );
+  }
 
   if (field === "title") {
     return (
@@ -494,14 +517,17 @@ export function ActiveFilterBadges({
 
   const badges = filterState.groups.flatMap((group, groupIndex) =>
     group.rules
-      .filter((rule) => rule.field && (operatorNeedsValues(rule.operator) ? rule.values.length > 0 : true))
+      .filter((rule) => isRuleActive(rule))
       .map((rule) => {
         const fieldLabel = FILTER_FIELD_LABELS[rule.field!];
         const operatorLabel = FILTER_OPERATOR_LABELS[rule.operator];
         let valueLabel = "";
 
         if (operatorNeedsValues(rule.operator)) {
-          if (rule.field === "title") {
+          if (rule.operator === "is_between") {
+            const [from, to] = rule.values;
+            valueLabel = `${from || "…"} → ${to || "…"}`;
+          } else if (rule.field === "title") {
             valueLabel = rule.values[0] ?? "";
           } else {
             valueLabel = rule.values.map((value) => labelsByValue.get(value) ?? value).join(", ");

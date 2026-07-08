@@ -26,6 +26,7 @@ export type FilterOperator =
   | "is_none_of"
   | "contains"
   | "not_contains"
+  | "is_between"
   | "is_empty"
   | "is_not_empty";
 
@@ -111,6 +112,7 @@ export const FILTER_OPERATOR_LABELS: Record<FilterOperator, string> = {
   is_none_of: "is none of",
   contains: "contains",
   not_contains: "does not contain",
+  is_between: "is between",
   is_empty: "is empty",
   is_not_empty: "is not empty",
 };
@@ -149,9 +151,9 @@ const FIELD_OPERATORS: Record<FilterField, FilterOperator[]> = {
   category: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   department: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
   assignee: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
-  due: ["is_any_of", "is_none_of", "is_empty", "is_not_empty"],
-  created: ["is_any_of", "is_none_of"],
-  done: ["is_any_of", "is_none_of"],
+  due: ["is_between", "is_any_of", "is_none_of", "is_empty", "is_not_empty"],
+  created: ["is_between", "is_any_of", "is_none_of"],
+  done: ["is_between", "is_any_of", "is_none_of"],
   creator: ["is_any_of", "is_none_of"],
 };
 
@@ -261,6 +263,7 @@ export function operatorNeedsValues(operator: FilterOperator): boolean {
 export function isRuleActive(rule: FilterRule): boolean {
   if (!rule.field) return false;
   if (!operatorNeedsValues(rule.operator)) return true;
+  if (rule.operator === "is_between") return rule.values.some((v) => !!v);
   return rule.values.length > 0;
 }
 
@@ -396,6 +399,30 @@ function matchesRule(task: TaskFilterRow, rule: FilterRule, context: FilterConte
     if (rule.field === "value") return !!task.value;
     if (rule.field === "category") return !!task.category;
     return rawValue !== null && rawValue !== "__unassigned__";
+  }
+
+  if (rule.operator === "is_between") {
+    const dateForField =
+      rule.field === "due"
+        ? task.dueDate
+        : rule.field === "created"
+          ? task.createdAt
+          : rule.field === "done"
+            ? task.completedAt
+            : null;
+    if (!dateForField) return false;
+
+    const value = new Date(dateForField);
+    const [fromStr, toStr] = rule.values;
+    if (fromStr) {
+      const from = new Date(`${fromStr}T00:00:00`);
+      if (value < from) return false;
+    }
+    if (toStr) {
+      const to = new Date(`${toStr}T23:59:59.999`);
+      if (value > to) return false;
+    }
+    return true;
   }
 
   if (rule.field === "department" && rule.operator === "is_any_of") {

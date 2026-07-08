@@ -248,6 +248,38 @@ async function migrate() {
     ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS category VARCHAR;
   `;
 
+  console.log("Creating tm_task_activity table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_task_activity (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      task_id VARCHAR NOT NULL REFERENCES tm_tasks(id) ON DELETE CASCADE,
+      user_id VARCHAR NOT NULL REFERENCES users(id),
+      action VARCHAR NOT NULL,
+      field VARCHAR,
+      old_value TEXT,
+      new_value TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_task_activity_task_id_idx ON tm_task_activity(task_id);
+  `;
+
+  console.log("Creating tm_task_comments table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_task_comments (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      task_id VARCHAR NOT NULL REFERENCES tm_tasks(id) ON DELETE CASCADE,
+      user_id VARCHAR NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_task_comments_task_id_idx ON tm_task_comments(task_id);
+  `;
+
   console.log("Migration complete!");
 }
 

@@ -169,6 +169,38 @@ export const userDepartment = pgTable("tm_user_department", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const taskActivity = pgTable("tm_task_activity", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  action: varchar("action").notNull(),
+  field: varchar("field"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const taskComments = pgTable("tm_task_comments", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id")
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
@@ -177,6 +209,8 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   approver: one(users, { fields: [tasks.approvedBy], references: [users.id] }),
   department: one(departments, { fields: [tasks.departmentId], references: [departments.id] }),
   images: many(taskImages),
+  activity: many(taskActivity),
+  comments: many(taskComments),
 }));
 
 export const userHierarchyRelations = relations(userHierarchy, ({ one }) => ({
@@ -196,4 +230,14 @@ export const userDepartmentRelations = relations(userDepartment, ({ one }) => ({
 export const departmentsRelations = relations(departments, ({ one, many }) => ({
   boss: one(users, { fields: [departments.bossId], references: [users.id] }),
   users: many(userDepartment),
+}));
+
+export const taskActivityRelations = relations(taskActivity, ({ one }) => ({
+  task: one(tasks, { fields: [taskActivity.taskId], references: [tasks.id] }),
+  user: one(users, { fields: [taskActivity.userId], references: [users.id] }),
+}));
+
+export const taskCommentsRelations = relations(taskComments, ({ one }) => ({
+  task: one(tasks, { fields: [taskComments.taskId], references: [tasks.id] }),
+  user: one(users, { fields: [taskComments.userId], references: [users.id] }),
 }));

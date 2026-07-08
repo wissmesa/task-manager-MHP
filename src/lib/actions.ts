@@ -1,9 +1,9 @@
 "use server";
 
 import { db } from "@/db";
-import { tasks, taskImages, users, userHierarchy, departments, userDepartment } from "@/db/schema";
+import { tasks, taskImages, users, userHierarchy, departments, userDepartment, taskActivity, taskComments } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { eq, desc, inArray, and, or } from "drizzle-orm";
+import { eq, desc, asc, inArray, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getSignedImageUrl } from "@/lib/s3";
 import { sendTaskCreatedEmail, sendStatusChangeEmail } from "@/lib/mail";
@@ -12,10 +12,14 @@ import {
   PRIORITY_LABELS,
   type TaskPriority,
 } from "@/lib/task-priority";
+import { PLANNING_STAGE_LABELS } from "@/lib/task-planning";
 import {
   TASK_EFFORTS,
   TASK_VALUES,
   TASK_CATEGORIES,
+  EFFORT_LABELS,
+  VALUE_LABELS,
+  CATEGORY_LABELS,
   type TaskEffort,
   type TaskValue,
   type TaskCategory,
@@ -60,6 +64,63 @@ export async function getBossForUser(userId: string) {
     },
   });
   return ud?.department?.bossId ?? null;
+}
+
+// ── Activity log ──────────────────────────────────────────────────────────────
+
+type ActivityEntry = {
+  action: string;
+  field?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+};
+
+/** Records a single change on a task's history. Never throws to the caller. */
+async function recordActivity(taskId: string, userId: string, entry: ActivityEntry) {
+  try {
+    await db.insert(taskActivity).values({
+      taskId,
+      userId,
+      action: entry.action,
+      field: entry.field ?? null,
+      oldValue: entry.oldValue ?? null,
+      newValue: entry.newValue ?? null,
+    });
+  } catch (err) {
+    console.error("Failed to record task activity", err);
+  }
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  in_progress: "In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+const DEV_TARGET_LABELS: Record<string, string> = {
+  task_manager: "Task Manager",
+  web_app: "Web App",
+  mobile_app: "Mobile App",
+  both: "Both (Web App, Mobile App)",
+};
+
+async function getUserName(userId: string | null | undefined): Promise<string> {
+  if (!userId) return "Unassigned";
+  const u = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { fullName: true },
+  });
+  return u?.fullName ?? "Unknown";
+}
+
+async function getDepartmentName(departmentId: string | null | undefined): Promise<string> {
+  if (!departmentId) return "No department";
+  const d = await db.query.departments.findFirst({
+    where: eq(departments.id, departmentId),
+    columns: { name: true },
+  });
+  return d?.name ?? "No department";
 }
 
 // ── Assignable users ────────────────────────────────────────────────────────
@@ -191,6 +252,15 @@ export async function updateTaskStatus(
     .set(updateData)
     .where(eq(tasks.id, taskId));
 
+  if (task.status !== status) {
+    await recordActivity(taskId, user.id, {
+      action: "status_changed",
+      field: "status",
+      oldValue: STATUS_LABELS[task.status] ?? task.status,
+      newValue: STATUS_LABELS[status] ?? status,
+    });
+  }
+
   if (status === "in_progress" || status === "completed" || status === "cancelled") {
     const [creatorUser, changerUser] = await Promise.all([
       db.query.users.findFirst({ where: eq(users.id, task.createdBy), columns: { email: true, fullName: true } }),
@@ -220,7 +290,7 @@ export async function updateTaskPriority(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, assignedTo: true, departmentId: true },
+    columns: { createdBy: true, assignedTo: true, departmentId: true, priority: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -233,6 +303,15 @@ export async function updateTaskPriority(
       updatedAt: new Date(),
     })
     .where(eq(tasks.id, taskId));
+
+  if (task.priority !== priority) {
+    await recordActivity(taskId, user.id, {
+      action: "priority_changed",
+      field: "priority",
+      oldValue: PRIORITY_LABELS[task.priority as TaskPriority] ?? task.priority,
+      newValue: PRIORITY_LABELS[priority] ?? priority,
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -259,7 +338,7 @@ export async function updateTaskWaitingForBundle(taskId: string, waitingForBundl
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { departmentId: true },
+    columns: { departmentId: true, waitingForBundle: true },
     with: { department: { columns: { name: true } } },
   });
   if (!task) throw new Error("Task not found");
@@ -272,6 +351,15 @@ export async function updateTaskWaitingForBundle(taskId: string, waitingForBundl
     .update(tasks)
     .set({ waitingForBundle, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (task.waitingForBundle !== waitingForBundle) {
+    await recordActivity(taskId, user.id, {
+      action: "bundle_changed",
+      field: "waitingForBundle",
+      oldValue: task.waitingForBundle ? "Waiting for bundle" : "Ready",
+      newValue: waitingForBundle ? "Waiting for bundle" : "Ready",
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -294,7 +382,7 @@ export async function updateTaskDevTarget(taskId: string, devTarget: DevTarget |
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { departmentId: true },
+    columns: { departmentId: true, devTarget: true },
     with: { department: { columns: { name: true } } },
   });
   if (!task) throw new Error("Task not found");
@@ -308,6 +396,15 @@ export async function updateTaskDevTarget(taskId: string, devTarget: DevTarget |
     .set({ devTarget, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
 
+  if (task.devTarget !== devTarget) {
+    await recordActivity(taskId, user.id, {
+      action: "target_changed",
+      field: "devTarget",
+      oldValue: task.devTarget ? DEV_TARGET_LABELS[task.devTarget] ?? task.devTarget : "Not specified",
+      newValue: devTarget ? DEV_TARGET_LABELS[devTarget] ?? devTarget : "Not specified",
+    });
+  }
+
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
 }
@@ -317,13 +414,15 @@ export async function updateTaskDevTarget(taskId: string, devTarget: DevTarget |
  * Any authenticated user who can view the task may edit it.
  */
 async function assertCanEditTaskAttributes(taskId: string) {
-  await requireAuth();
+  const user = await requireAuth();
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { id: true },
+    columns: { id: true, effort: true, value: true, category: true },
   });
   if (!task) throw new Error("Task not found");
+
+  return { user, task };
 }
 
 export async function updateTaskEffort(taskId: string, effort: TaskEffort | null) {
@@ -331,12 +430,21 @@ export async function updateTaskEffort(taskId: string, effort: TaskEffort | null
     throw new Error("Invalid effort value");
   }
 
-  await assertCanEditTaskAttributes(taskId);
+  const { user, task } = await assertCanEditTaskAttributes(taskId);
 
   await db
     .update(tasks)
     .set({ effort, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (task.effort !== effort) {
+    await recordActivity(taskId, user.id, {
+      action: "effort_changed",
+      field: "effort",
+      oldValue: task.effort ? EFFORT_LABELS[task.effort] ?? task.effort : "Not specified",
+      newValue: effort ? EFFORT_LABELS[effort] ?? effort : "Not specified",
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -347,12 +455,21 @@ export async function updateTaskValue(taskId: string, value: TaskValue | null) {
     throw new Error("Invalid value");
   }
 
-  await assertCanEditTaskAttributes(taskId);
+  const { user, task } = await assertCanEditTaskAttributes(taskId);
 
   await db
     .update(tasks)
     .set({ value, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (task.value !== value) {
+    await recordActivity(taskId, user.id, {
+      action: "value_changed",
+      field: "value",
+      oldValue: task.value ? VALUE_LABELS[task.value] ?? task.value : "Not specified",
+      newValue: value ? VALUE_LABELS[value] ?? value : "Not specified",
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -363,12 +480,21 @@ export async function updateTaskCategory(taskId: string, category: TaskCategory 
     throw new Error("Invalid category");
   }
 
-  await assertCanEditTaskAttributes(taskId);
+  const { user, task } = await assertCanEditTaskAttributes(taskId);
 
   await db
     .update(tasks)
     .set({ category, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (task.category !== category) {
+    await recordActivity(taskId, user.id, {
+      action: "category_changed",
+      field: "category",
+      oldValue: task.category ? CATEGORY_LABELS[task.category] ?? task.category : "Not specified",
+      newValue: category ? CATEGORY_LABELS[category] ?? category : "Not specified",
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -382,7 +508,7 @@ export async function updateTaskPlanningStage(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, assignedTo: true, departmentId: true },
+    columns: { createdBy: true, assignedTo: true, departmentId: true, planningStage: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -392,6 +518,15 @@ export async function updateTaskPlanningStage(
     .update(tasks)
     .set({ planningStage, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (task.planningStage !== planningStage) {
+    await recordActivity(taskId, user.id, {
+      action: "planning_stage_changed",
+      field: "planningStage",
+      oldValue: task.planningStage ? PLANNING_STAGE_LABELS[task.planningStage] : "Standard task",
+      newValue: planningStage ? PLANNING_STAGE_LABELS[planningStage] : "Standard task",
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -405,7 +540,7 @@ export async function updateTaskAssignee(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, departmentId: true, title: true, description: true, priority: true, dueDate: true },
+    columns: { createdBy: true, departmentId: true, title: true, description: true, priority: true, dueDate: true, assignedTo: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -436,6 +571,19 @@ export async function updateTaskAssignee(
     .update(tasks)
     .set({ assignedTo, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  if (task.assignedTo !== assignedTo) {
+    const [oldName, newName] = await Promise.all([
+      getUserName(task.assignedTo),
+      getUserName(assignedTo),
+    ]);
+    await recordActivity(taskId, user.id, {
+      action: "assignee_changed",
+      field: "assignedTo",
+      oldValue: oldName,
+      newValue: newName,
+    });
+  }
 
   if (assignedTo) {
     const [assigneeUser, creatorUser, deptInfo] = await Promise.all([
@@ -482,7 +630,7 @@ export async function updateTask(
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { createdBy: true, departmentId: true, status: true },
+    columns: { createdBy: true, departmentId: true, status: true, title: true, description: true, priority: true, assignedTo: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -529,6 +677,68 @@ export async function updateTask(
     .set(updatePayload)
     .where(eq(tasks.id, taskId));
 
+  // Record field-level history for the changes made in the edit form.
+  if (task.title !== data.title) {
+    await recordActivity(taskId, user.id, {
+      action: "title_changed",
+      field: "title",
+      oldValue: task.title,
+      newValue: data.title,
+    });
+  }
+  if ((task.description ?? "") !== (data.description ?? "")) {
+    await recordActivity(taskId, user.id, {
+      action: "description_changed",
+      field: "description",
+      oldValue: task.description ?? "(empty)",
+      newValue: data.description ?? "(empty)",
+    });
+  }
+  if (task.priority !== data.priority) {
+    await recordActivity(taskId, user.id, {
+      action: "priority_changed",
+      field: "priority",
+      oldValue: PRIORITY_LABELS[task.priority as TaskPriority] ?? task.priority,
+      newValue: PRIORITY_LABELS[data.priority] ?? data.priority,
+    });
+  }
+  if (task.status !== data.status) {
+    await recordActivity(taskId, user.id, {
+      action: "status_changed",
+      field: "status",
+      oldValue: STATUS_LABELS[task.status] ?? task.status,
+      newValue: STATUS_LABELS[data.status] ?? data.status,
+    });
+  }
+  if (task.assignedTo !== data.assignedTo) {
+    const [oldName, newName] = await Promise.all([
+      getUserName(task.assignedTo),
+      getUserName(data.assignedTo),
+    ]);
+    await recordActivity(taskId, user.id, {
+      action: "assignee_changed",
+      field: "assignedTo",
+      oldValue: oldName,
+      newValue: newName,
+    });
+  }
+  if (
+    data.departmentId !== undefined &&
+    isAdminUser(user) &&
+    task.departmentId !== data.departmentId
+  ) {
+    const [oldName, newName] = await Promise.all([
+      getDepartmentName(task.departmentId),
+      getDepartmentName(data.departmentId),
+    ]);
+    await recordActivity(taskId, user.id, {
+      action: "department_changed",
+      field: "departmentId",
+      oldValue: oldName,
+      newValue: newName,
+    });
+  }
+
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
 }
@@ -538,7 +748,7 @@ export async function updateTaskDueDate(taskId: string, dueDateStr: string | nul
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { assignedTo: true, departmentId: true, priority: true, createdAt: true },
+    columns: { assignedTo: true, departmentId: true, priority: true, createdAt: true, dueDate: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -570,6 +780,17 @@ export async function updateTaskDueDate(taskId: string, dueDateStr: string | nul
     .update(tasks)
     .set({ dueDate, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  const fmtDate = (d: Date | null) =>
+    d ? new Date(d).toLocaleDateString("en-US", { day: "2-digit", month: "long", year: "numeric" }) : "No due date";
+  if (fmtDate(task.dueDate) !== fmtDate(dueDate)) {
+    await recordActivity(taskId, user.id, {
+      action: "due_date_changed",
+      field: "dueDate",
+      oldValue: fmtDate(task.dueDate),
+      newValue: fmtDate(dueDate),
+    });
+  }
 
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
@@ -646,6 +867,7 @@ export async function approveTask(taskId: string) {
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, taskId));
+      await recordActivity(taskId, user.id, { action: "approved", newValue: "Approved" });
     } else {
       await db
         .update(tasks)
@@ -655,6 +877,10 @@ export async function approveTask(taskId: string) {
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, taskId));
+      await recordActivity(taskId, user.id, {
+        action: "coordinator_approved",
+        newValue: "Approved by coordinator — forwarded to department",
+      });
     }
   } else if (task.approval === "pending_dept_approval") {
     if (!task.departmentId) throw new Error("Task has no target department");
@@ -675,6 +901,7 @@ export async function approveTask(taskId: string) {
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId));
+    await recordActivity(taskId, user.id, { action: "approved", newValue: "Approved" });
   } else {
     throw new Error("Task is not awaiting approval");
   }
@@ -720,6 +947,8 @@ export async function rejectTask(taskId: string) {
     })
     .where(eq(tasks.id, taskId));
 
+  await recordActivity(taskId, user.id, { action: "rejected", newValue: "Rejected" });
+
   revalidatePath("/tasks");
   revalidatePath(`/tasks/${taskId}`);
 }
@@ -748,6 +977,13 @@ export async function assignTaskToUser(taskId: string, assignedTo: string) {
     .update(tasks)
     .set({ assignedTo, updatedAt: new Date() })
     .where(eq(tasks.id, taskId));
+
+  await recordActivity(taskId, user.id, {
+    action: "assignee_changed",
+    field: "assignedTo",
+    oldValue: "Unassigned",
+    newValue: await getUserName(assignedTo),
+  });
 
   const [assigneeUser, creatorUser, deptInfo] = await Promise.all([
     db.query.users.findFirst({ where: eq(users.id, assignedTo), columns: { email: true, fullName: true } }),
@@ -1031,4 +1267,89 @@ export async function getTaskById(id: string) {
     ...task,
     images: resolvedImages,
   };
+}
+
+// ── Comments ────────────────────────────────────────────────────────────────
+
+export async function getTaskComments(taskId: string) {
+  const session = await auth();
+  if (!session?.user) return [];
+
+  const rows = await db.query.taskComments.findMany({
+    where: eq(taskComments.taskId, taskId),
+    with: { user: { columns: { id: true, fullName: true, email: true } } },
+    orderBy: [asc(taskComments.createdAt)],
+  });
+
+  return rows.map((c) => ({
+    id: c.id,
+    content: c.content,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+    userId: c.userId,
+    author: c.user ? { id: c.user.id, fullName: c.user.fullName, email: c.user.email } : null,
+  }));
+}
+
+export async function addTaskComment(taskId: string, content: string) {
+  const user = await requireAuth();
+
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error("Comment cannot be empty");
+  if (trimmed.length > 5000) throw new Error("Comment is too long");
+
+  // Any authenticated user who can view the task may comment.
+  const task = await db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { id: true },
+  });
+  if (!task) throw new Error("Task not found");
+
+  await db.insert(taskComments).values({
+    taskId,
+    userId: user.id,
+    content: trimmed,
+  });
+
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+export async function deleteTaskComment(commentId: string) {
+  const user = await requireAuth();
+
+  const comment = await db.query.taskComments.findFirst({
+    where: eq(taskComments.id, commentId),
+    columns: { id: true, userId: true, taskId: true },
+  });
+  if (!comment) throw new Error("Comment not found");
+
+  const allowed = isAdminUser(user) || comment.userId === user.id;
+  if (!allowed) throw new Error("You can only delete your own comments");
+
+  await db.delete(taskComments).where(eq(taskComments.id, commentId));
+
+  revalidatePath(`/tasks/${comment.taskId}`);
+}
+
+// ── Activity / history ────────────────────────────────────────────────────────
+
+export async function getTaskActivity(taskId: string) {
+  const session = await auth();
+  if (!session?.user) return [];
+
+  const rows = await db.query.taskActivity.findMany({
+    where: eq(taskActivity.taskId, taskId),
+    with: { user: { columns: { id: true, fullName: true } } },
+    orderBy: [desc(taskActivity.createdAt)],
+  });
+
+  return rows.map((a) => ({
+    id: a.id,
+    action: a.action,
+    field: a.field,
+    oldValue: a.oldValue,
+    newValue: a.newValue,
+    createdAt: a.createdAt,
+    user: a.user ? { id: a.user.id, fullName: a.user.fullName } : null,
+  }));
 }
