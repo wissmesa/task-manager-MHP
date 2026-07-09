@@ -226,6 +226,38 @@ export const recurringTasks = pgTable("tm_recurring_tasks", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const recurringTaskActivity = pgTable("tm_recurring_task_activity", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  recurringTaskId: varchar("recurring_task_id")
+    .notNull()
+    .references(() => recurringTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  action: varchar("action").notNull(),
+  field: varchar("field"),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const recurringTaskComments = pgTable("tm_recurring_task_comments", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  recurringTaskId: varchar("recurring_task_id")
+    .notNull()
+    .references(() => recurringTasks.id, { onDelete: "cascade" }),
+  userId: varchar("user_id")
+    .notNull()
+    .references(() => users.id),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const recurringTaskCompletions = pgTable("tm_recurring_task_completions", {
   id: varchar("id")
     .primaryKey()
@@ -290,7 +322,37 @@ export const recurringTasksRelations = relations(recurringTasks, ({ one, many })
     references: [departments.id],
   }),
   completions: many(recurringTaskCompletions),
+  activity: many(recurringTaskActivity),
+  comments: many(recurringTaskComments),
 }));
+
+export const recurringTaskActivityRelations = relations(
+  recurringTaskActivity,
+  ({ one }) => ({
+    recurringTask: one(recurringTasks, {
+      fields: [recurringTaskActivity.recurringTaskId],
+      references: [recurringTasks.id],
+    }),
+    user: one(users, {
+      fields: [recurringTaskActivity.userId],
+      references: [users.id],
+    }),
+  })
+);
+
+export const recurringTaskCommentsRelations = relations(
+  recurringTaskComments,
+  ({ one }) => ({
+    recurringTask: one(recurringTasks, {
+      fields: [recurringTaskComments.recurringTaskId],
+      references: [recurringTasks.id],
+    }),
+    user: one(users, {
+      fields: [recurringTaskComments.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 export const recurringTaskCompletionsRelations = relations(
   recurringTaskCompletions,

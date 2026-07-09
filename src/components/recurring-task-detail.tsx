@@ -33,8 +33,15 @@ import {
 } from "lucide-react";
 import { RecurringOccurrences } from "@/components/recurring-tasks-view";
 import {
+  TaskDiscussion,
+  type CommentItem,
+  type ActivityItem,
+} from "@/components/task-discussion";
+import {
   updateRecurringTask,
   deleteRecurringTask,
+  addRecurringTaskComment,
+  deleteRecurringTaskComment,
   type RecurringTaskDTO,
 } from "@/lib/recurring-actions";
 import {
@@ -56,6 +63,10 @@ interface RecurringTaskDetailProps {
   departments: Department[];
   membersMap: Record<string, { id: string; fullName: string }[]>;
   currentUserName: string;
+  currentUserId: string;
+  isAdmin: boolean;
+  comments: CommentItem[];
+  activity: ActivityItem[];
 }
 
 export function RecurringTaskDetail({
@@ -63,6 +74,10 @@ export function RecurringTaskDetail({
   departments,
   membersMap,
   currentUserName,
+  currentUserId,
+  isAdmin,
+  comments,
+  activity,
 }: RecurringTaskDetailProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -402,6 +417,18 @@ export function RecurringTaskDetail({
             <RecurringOccurrences task={task} currentUserName={currentUserName} />
           </CardContent>
         </Card>
+      )}
+
+      {!editing && (
+        <TaskDiscussion
+          taskId={task.id}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin}
+          comments={comments}
+          activity={activity}
+          onAddComment={addRecurringTaskComment}
+          onDeleteComment={deleteRecurringTaskComment}
+        />
       )}
     </div>
   );

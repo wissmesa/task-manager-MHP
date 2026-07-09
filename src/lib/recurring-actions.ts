@@ -4,12 +4,14 @@ import { db } from "@/db";
 import {
   recurringTasks,
   recurringTaskCompletions,
+  recurringTaskActivity,
+  recurringTaskComments,
   departments,
   userDepartment,
   users,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import { and, eq, inArray, or, desc } from "drizzle-orm";
+import { and, eq, inArray, or, asc, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   isValidPeriodKey,
@@ -122,6 +124,46 @@ export async function getDepartmentMembersMap(): Promise<
     map[key].sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
   return map;
+}
+
+async function recordRecurringActivity(entry: {
+  recurringTaskId: string;
+  userId: string;
+  action: string;
+  field?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+}): Promise<void> {
+  try {
+    await db.insert(recurringTaskActivity).values({
+      recurringTaskId: entry.recurringTaskId,
+      userId: entry.userId,
+      action: entry.action,
+      field: entry.field ?? null,
+      oldValue: entry.oldValue ?? null,
+      newValue: entry.newValue ?? null,
+    });
+  } catch (err) {
+    console.error("Failed to record recurring task activity:", err);
+  }
+}
+
+async function getUserName(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const u = await db.query.users.findFirst({
+    where: eq(users.id, userId),
+    columns: { fullName: true },
+  });
+  return u?.fullName ?? null;
+}
+
+async function getDepartmentName(deptId: string | null): Promise<string | null> {
+  if (!deptId) return null;
+  const d = await db.query.departments.findFirst({
+    where: eq(departments.id, deptId),
+    columns: { name: true },
+  });
+  return d?.name ?? null;
 }
 
 async function getUserContext(userId: string) {
@@ -341,6 +383,9 @@ export async function updateRecurringTask(
     where: eq(recurringTasks.id, id),
     columns: {
       id: true,
+      title: true,
+      description: true,
+      instructions: true,
       departmentId: true,
       createdBy: true,
       frequency: true,
@@ -390,6 +435,62 @@ export async function updateRecurringTask(
     await db
       .delete(recurringTaskCompletions)
       .where(eq(recurringTaskCompletions.recurringTaskId, id));
+  }
+
+  // Record the change history.
+  const uid = session.user.id;
+  const newAssigneeId = input.assignedTo || null;
+  const newDescription = input.description?.trim() || null;
+  const newInstructions = input.instructions?.trim() || null;
+  if (task.title !== title) {
+    await recordRecurringActivity({
+      recurringTaskId: id,
+      userId: uid,
+      action: "title_changed",
+      oldValue: task.title,
+      newValue: title,
+    });
+  }
+  if ((task.description ?? null) !== newDescription) {
+    await recordRecurringActivity({
+      recurringTaskId: id,
+      userId: uid,
+      action: "description_changed",
+    });
+  }
+  if ((task.instructions ?? null) !== newInstructions) {
+    await recordRecurringActivity({
+      recurringTaskId: id,
+      userId: uid,
+      action: "instructions_changed",
+    });
+  }
+  if (task.departmentId !== input.departmentId) {
+    await recordRecurringActivity({
+      recurringTaskId: id,
+      userId: uid,
+      action: "department_changed",
+      oldValue: (await getDepartmentName(task.departmentId)) ?? undefined,
+      newValue: (await getDepartmentName(input.departmentId)) ?? undefined,
+    });
+  }
+  if ((task.assignedTo ?? null) !== newAssigneeId) {
+    await recordRecurringActivity({
+      recurringTaskId: id,
+      userId: uid,
+      action: "assignee_changed",
+      oldValue: (await getUserName(task.assignedTo)) ?? "Unassigned",
+      newValue: (await getUserName(newAssigneeId)) ?? "Unassigned",
+    });
+  }
+  if (task.frequency !== input.frequency) {
+    await recordRecurringActivity({
+      recurringTaskId: id,
+      userId: uid,
+      action: "frequency_changed",
+      oldValue: task.frequency,
+      newValue: input.frequency,
+    });
   }
 
   // Notify the new responsible only when the assignee actually changed.
@@ -459,6 +560,13 @@ export async function createRecurringTask(input: {
       dueDayOfMonth,
     })
     .returning();
+
+  await recordRecurringActivity({
+    recurringTaskId: row.id,
+    userId: session.user.id,
+    action: "created",
+    newValue: "Recurring task created",
+  });
 
   if (input.assignedTo) {
     await notifyRecurringAssignee({
@@ -536,4 +644,124 @@ export async function deleteRecurringTask(id: string): Promise<void> {
 
   await db.delete(recurringTasks).where(eq(recurringTasks.id, id));
   revalidatePath("/recurring");
+}
+
+// ── Comments & activity ──────────────────────────────────────────────────────
+
+export interface RecurringCommentItem {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+  userId: string;
+  author: { id: string; fullName: string; email: string } | null;
+}
+
+export interface RecurringActivityItem {
+  id: string;
+  action: string;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: string;
+  user: { id: string; fullName: string } | null;
+}
+
+export async function getRecurringTaskComments(
+  recurringTaskId: string
+): Promise<RecurringCommentItem[]> {
+  const session = await auth();
+  if (!session?.user) return [];
+
+  const rows = await db.query.recurringTaskComments.findMany({
+    where: eq(recurringTaskComments.recurringTaskId, recurringTaskId),
+    with: { user: { columns: { id: true, fullName: true, email: true } } },
+    orderBy: [asc(recurringTaskComments.createdAt)],
+  });
+
+  return rows.map((c) => ({
+    id: c.id,
+    content: c.content,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+    userId: c.userId,
+    author: c.user
+      ? { id: c.user.id, fullName: c.user.fullName, email: c.user.email }
+      : null,
+  }));
+}
+
+export async function addRecurringTaskComment(
+  recurringTaskId: string,
+  content: string
+): Promise<void> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error("Comment cannot be empty");
+  if (trimmed.length > 5000) throw new Error("Comment is too long");
+
+  const task = await db.query.recurringTasks.findFirst({
+    where: eq(recurringTasks.id, recurringTaskId),
+    columns: { id: true, departmentId: true, assignedTo: true, createdBy: true },
+  });
+  if (!task) throw new Error("Recurring task not found");
+
+  // Anyone who can view the task may comment.
+  const allowed = await canToggle(session.user, task);
+  if (!allowed) throw new Error("You don't have access to this task");
+
+  await db.insert(recurringTaskComments).values({
+    recurringTaskId,
+    userId: session.user.id,
+    content: trimmed,
+  });
+
+  revalidatePath(`/recurring/${recurringTaskId}`);
+}
+
+export async function deleteRecurringTaskComment(commentId: string): Promise<void> {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const comment = await db.query.recurringTaskComments.findFirst({
+    where: eq(recurringTaskComments.id, commentId),
+    columns: { id: true, userId: true, recurringTaskId: true },
+  });
+  if (!comment) throw new Error("Comment not found");
+
+  const isAdmin = session.user.email === ADMIN_EMAIL;
+  if (!isAdmin && comment.userId !== session.user.id) {
+    throw new Error("You can only delete your own comments");
+  }
+
+  await db
+    .delete(recurringTaskComments)
+    .where(eq(recurringTaskComments.id, commentId));
+
+  revalidatePath(`/recurring/${comment.recurringTaskId}`);
+}
+
+export async function getRecurringTaskActivity(
+  recurringTaskId: string
+): Promise<RecurringActivityItem[]> {
+  const session = await auth();
+  if (!session?.user) return [];
+
+  const rows = await db.query.recurringTaskActivity.findMany({
+    where: eq(recurringTaskActivity.recurringTaskId, recurringTaskId),
+    with: { user: { columns: { id: true, fullName: true } } },
+    orderBy: [desc(recurringTaskActivity.createdAt)],
+  });
+
+  return rows.map((a) => ({
+    id: a.id,
+    action: a.action,
+    field: a.field,
+    oldValue: a.oldValue,
+    newValue: a.newValue,
+    createdAt: a.createdAt.toISOString(),
+    user: a.user ? { id: a.user.id, fullName: a.user.fullName } : null,
+  }));
 }

@@ -35,6 +35,9 @@ interface TaskDiscussionProps {
   isAdmin: boolean;
   comments: CommentItem[];
   activity: ActivityItem[];
+  /** Optional custom server actions (defaults to regular task actions). */
+  onAddComment?: (taskId: string, content: string) => Promise<void>;
+  onDeleteComment?: (commentId: string) => Promise<void>;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -51,6 +54,8 @@ const ACTION_LABELS: Record<string, string> = {
   bundle_changed: "changed the bundle status",
   title_changed: "changed the title",
   description_changed: "updated the description",
+  instructions_changed: "updated the instructions",
+  frequency_changed: "changed the frequency",
   department_changed: "changed the department",
   approved: "approved the task",
   coordinator_approved: "approved the task (coordinator)",
@@ -96,18 +101,23 @@ export function TaskDiscussion({
   isAdmin,
   comments,
   activity,
+  onAddComment,
+  onDeleteComment,
 }: TaskDiscussionProps) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
   const [submitting, startSubmit] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const addComment = onAddComment ?? addTaskComment;
+  const removeComment = onDeleteComment ?? deleteTaskComment;
+
   function handleSubmit() {
     const content = draft.trim();
     if (!content) return;
     startSubmit(async () => {
       try {
-        await addTaskComment(taskId, content);
+        await addComment(taskId, content);
         setDraft("");
         router.refresh();
       } catch (err) {
@@ -120,7 +130,7 @@ export function TaskDiscussion({
     if (!confirm("Delete this comment?")) return;
     setDeletingId(commentId);
     try {
-      await deleteTaskComment(commentId);
+      await removeComment(commentId);
       router.refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete comment");
