@@ -43,6 +43,34 @@ export interface CompletionInfo {
   completedByName: string | null;
 }
 
+/**
+ * Members of every department, keyed by departmentId. Used to pick a
+ * responsible person for a recurring task (informational only).
+ */
+export async function getDepartmentMembersMap(): Promise<
+  Record<string, { id: string; fullName: string }[]>
+> {
+  const session = await auth();
+  if (!session?.user) return {};
+
+  const rows = await db.query.userDepartment.findMany({
+    with: { user: { columns: { id: true, fullName: true } } },
+  });
+
+  const map: Record<string, { id: string; fullName: string }[]> = {};
+  for (const r of rows) {
+    if (!r.user) continue;
+    (map[r.departmentId] ??= []).push({
+      id: r.user.id,
+      fullName: r.user.fullName,
+    });
+  }
+  for (const key of Object.keys(map)) {
+    map[key].sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+  return map;
+}
+
 async function getUserContext(userId: string) {
   const myDept = await db.query.userDepartment.findFirst({
     where: eq(userDepartment.userId, userId),
@@ -247,6 +275,7 @@ export async function updateRecurringTask(
     frequency: RecurrenceFrequency;
     dueWeekday?: number | null;
     dueDayOfMonth?: number | null;
+    assignedTo?: string | null;
   }
 ): Promise<void> {
   const session = await auth();
@@ -285,6 +314,7 @@ export async function updateRecurringTask(
       title,
       description: input.description?.trim() || null,
       departmentId: input.departmentId,
+      assignedTo: input.assignedTo || null,
       frequency: input.frequency,
       dueWeekday,
       dueDayOfMonth,
@@ -318,6 +348,7 @@ export async function createRecurringTask(input: {
   const title = input.title?.trim();
   if (!title) throw new Error("Title is required");
   if (!input.departmentId) throw new Error("Department is required");
+  if (!input.assignedTo) throw new Error("A responsible person is required");
   if (!["daily", "weekly", "monthly"].includes(input.frequency)) {
     throw new Error("Invalid frequency");
   }

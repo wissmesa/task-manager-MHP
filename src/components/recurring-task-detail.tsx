@@ -28,6 +28,7 @@ import {
   Repeat,
   Save,
   Trash2,
+  User,
   X,
 } from "lucide-react";
 import { RecurringOccurrences } from "@/components/recurring-tasks-view";
@@ -53,12 +54,14 @@ interface Department {
 interface RecurringTaskDetailProps {
   task: RecurringTaskDTO;
   departments: Department[];
+  membersMap: Record<string, { id: string; fullName: string }[]>;
   currentUserName: string;
 }
 
 export function RecurringTaskDetail({
   task,
   departments,
+  membersMap,
   currentUserName,
 }: RecurringTaskDetailProps) {
   const router = useRouter();
@@ -67,15 +70,19 @@ export function RecurringTaskDetail({
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
   const [departmentId, setDepartmentId] = useState(task.departmentId);
+  const [assignedTo, setAssignedTo] = useState(task.assignedTo ?? "none");
   const [frequency, setFrequency] = useState<RecurrenceFrequency>(task.frequency);
   const [dueWeekday, setDueWeekday] = useState(String(task.dueWeekday ?? 1));
   const [dueDayOfMonth, setDueDayOfMonth] = useState(String(task.dueDayOfMonth ?? 30));
   const [saving, setSaving] = useState(false);
 
+  const members = membersMap[departmentId] ?? [];
+
   function resetForm() {
     setTitle(task.title);
     setDescription(task.description ?? "");
     setDepartmentId(task.departmentId);
+    setAssignedTo(task.assignedTo ?? "none");
     setFrequency(task.frequency);
     setDueWeekday(String(task.dueWeekday ?? 1));
     setDueDayOfMonth(String(task.dueDayOfMonth ?? 30));
@@ -98,6 +105,7 @@ export function RecurringTaskDetail({
         title: title.trim(),
         description: description.trim() || undefined,
         departmentId,
+        assignedTo: assignedTo === "none" ? null : assignedTo,
         frequency,
         dueWeekday: frequency === "weekly" ? Number(dueWeekday) : null,
         dueDayOfMonth: frequency === "monthly" ? Number(dueDayOfMonth) : null,
@@ -174,6 +182,12 @@ export function RecurringTaskDetail({
                 <span className="text-sm text-muted-foreground">
                   {describeRecurrence(task.frequency, task.dueWeekday, task.dueDayOfMonth)}
                 </span>
+                {task.assigneeName && (
+                  <Badge variant="outline" className="gap-1">
+                    <User className="h-3 w-3" />
+                    {task.assigneeName}
+                  </Badge>
+                )}
               </div>
             </>
           )}
@@ -204,7 +218,13 @@ export function RecurringTaskDetail({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Department *</Label>
-                  <Select value={departmentId} onValueChange={setDepartmentId}>
+                  <Select
+                    value={departmentId}
+                    onValueChange={(v) => {
+                      setDepartmentId(v);
+                      setAssignedTo("none");
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select department..." />
                     </SelectTrigger>
@@ -212,6 +232,23 @@ export function RecurringTaskDetail({
                       {departments.map((d) => (
                         <SelectItem key={d.id} value={d.id}>
                           {d.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Responsible</Label>
+                  <Select value={assignedTo} onValueChange={setAssignedTo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a person..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {members.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.fullName}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -37,17 +37,21 @@ interface Department {
 
 interface RecurringTaskFormProps {
   departments: Department[];
+  membersMap: Record<string, { id: string; fullName: string }[]>;
 }
 
-export function RecurringTaskForm({ departments }: RecurringTaskFormProps) {
+export function RecurringTaskForm({ departments, membersMap }: RecurringTaskFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [departmentId, setDepartmentId] = useState("none");
+  const [assignedTo, setAssignedTo] = useState("none");
   const [frequency, setFrequency] = useState<RecurrenceFrequency>("weekly");
   const [dueWeekday, setDueWeekday] = useState("1"); // Monday
   const [dueDayOfMonth, setDueDayOfMonth] = useState("30");
+
+  const members = departmentId !== "none" ? (membersMap[departmentId] ?? []) : [];
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -60,6 +64,10 @@ export function RecurringTaskForm({ departments }: RecurringTaskFormProps) {
       alert("Debes seleccionar un departamento");
       return;
     }
+    if (assignedTo === "none") {
+      alert("Debes asignar un responsable");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -67,6 +75,7 @@ export function RecurringTaskForm({ departments }: RecurringTaskFormProps) {
         title: title.trim(),
         description: description.trim() || undefined,
         departmentId,
+        assignedTo,
         frequency,
         dueWeekday: frequency === "weekly" ? Number(dueWeekday) : null,
         dueDayOfMonth: frequency === "monthly" ? Number(dueDayOfMonth) : null,
@@ -117,7 +126,10 @@ export function RecurringTaskForm({ departments }: RecurringTaskFormProps) {
               <Label>Department *</Label>
               <Select
                 value={departmentId}
-                onValueChange={(v) => setDepartmentId(v)}
+                onValueChange={(v) => {
+                  setDepartmentId(v);
+                  setAssignedTo("none");
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select department..." />
@@ -150,6 +162,33 @@ export function RecurringTaskForm({ departments }: RecurringTaskFormProps) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Responsible *</Label>
+            <Select
+              value={assignedTo}
+              onValueChange={setAssignedTo}
+              disabled={departmentId === "none"}
+            >
+              <SelectTrigger className="w-full sm:w-[280px]">
+                <SelectValue placeholder="Select a person..." />
+              </SelectTrigger>
+              <SelectContent>
+                {members.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {departmentId === "none"
+                ? "Select a department first."
+                : members.length === 0
+                  ? "This department has no members yet."
+                  : "Person responsible for keeping this task on track."}
+            </p>
           </div>
 
           {frequency === "weekly" && (

@@ -26,6 +26,7 @@ import {
   Rows3,
   Search,
   Trash2,
+  User,
 } from "lucide-react";
 import {
   Tooltip,
@@ -560,6 +561,12 @@ function RecurringTaskCard({
               <Repeat className="h-3 w-3 shrink-0" />
               <span className="truncate">
                 {describeRecurrence(task.frequency, task.dueWeekday, task.dueDayOfMonth)}
+              </span>
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              <User className="h-3 w-3 shrink-0" />
+              <span className="truncate">
+                {task.assigneeName ?? "Unassigned"}
               </span>
             </div>
           </div>
