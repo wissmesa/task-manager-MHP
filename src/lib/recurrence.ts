@@ -397,5 +397,5 @@ export function describeRecurrence(
     return `Every ${WEEKDAY_LABELS[wd]}`;
   }
   const d = dueDayOfMonth ?? 1;
-  return `By day ${d} of each month`;
+  return `By day ${d}`;
 }

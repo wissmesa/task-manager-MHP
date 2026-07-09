@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getDepartments, getCurrentUserDepartment, getTaskComments, getTaskActivity } from "@/lib/actions";
+import { getTaskById, getBossForUser, getDepartmentSubordinates, getUserDepartmentInfo, getPublicDepartments, getCurrentUserDepartment, getSubordinatesForBossDepts, getTaskComments, getTaskActivity } from "@/lib/actions";
 import { TaskDetail } from "@/components/task-detail";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
@@ -38,12 +38,20 @@ export default async function TaskDetailPage({
     }
   }
 
-  const departments = isAdmin
-    ? (await getDepartments()).map((d) => ({ id: d.id, name: d.name }))
-    : [];
+  // Any editor can move a task to another department, so every authenticated
+  // user gets the full department list.
+  const departments = (await getPublicDepartments()).map((d) => ({
+    id: d.id,
+    name: d.name,
+  }));
 
   const viewerDept = await getCurrentUserDepartment();
   const canEditDevFields = isAdmin || viewerDept?.name === "Development";
+  const isExecutive = viewerDept?.name?.toLowerCase() === "executive";
+
+  // Members grouped by department the current user may assign into: their own
+  // department (if boss) or every department (Executive / admin).
+  const departmentMembersMap = await getSubordinatesForBossDepts();
 
   const [comments, activity] = await Promise.all([
     getTaskComments(task.id),
@@ -95,8 +103,10 @@ export default async function TaskDetailPage({
         isBossOfCreator={isBossOfCreator}
         isBossOfDepartment={isBossOfDepartment}
         isAdmin={isAdmin}
+        isExecutive={isExecutive}
         canEditDevFields={canEditDevFields}
         departments={departments}
+        departmentMembersMap={departmentMembersMap}
         subordinates={subordinates}
         comments={comments}
         activity={activity}

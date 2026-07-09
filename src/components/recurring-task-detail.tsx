@@ -23,8 +23,6 @@ import {
 } from "@/components/ui/card";
 import {
   ArrowLeft,
-  CalendarDays,
-  List,
   Loader2,
   Pencil,
   Repeat,
@@ -32,7 +30,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { RecurringOccurrences } from "@/components/recurring-tasks-view";
 import {
   updateRecurringTask,
@@ -59,8 +56,6 @@ interface RecurringTaskDetailProps {
   currentUserName: string;
 }
 
-type OccView = "strip" | "calendar";
-
 export function RecurringTaskDetail({
   task,
   departments,
@@ -68,7 +63,6 @@ export function RecurringTaskDetail({
 }: RecurringTaskDetailProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
-  const [occView, setOccView] = useState<OccView>("strip");
 
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
@@ -335,43 +329,11 @@ export function RecurringTaskDetail({
 
       {!editing && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <CardHeader className="pb-3">
             <CardTitle className="text-base">Tracking</CardTitle>
-            <div className="inline-flex shrink-0 rounded-md border p-0.5">
-              <button
-                type="button"
-                onClick={() => setOccView("strip")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium transition-colors",
-                  occView === "strip"
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <List className="h-4 w-4" />
-                Strip
-              </button>
-              <button
-                type="button"
-                onClick={() => setOccView("calendar")}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium transition-colors",
-                  occView === "calendar"
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <CalendarDays className="h-4 w-4" />
-                Calendar
-              </button>
-            </div>
           </CardHeader>
           <CardContent>
-            <RecurringOccurrences
-              task={task}
-              currentUserName={currentUserName}
-              occView={occView}
-            />
+            <RecurringOccurrences task={task} currentUserName={currentUserName} />
           </CardContent>
         </Card>
       )}

@@ -169,8 +169,10 @@ interface TaskDetailProps {
   isBossOfCreator: boolean;
   isBossOfDepartment: boolean;
   isAdmin?: boolean;
+  isExecutive?: boolean;
   canEditDevFields?: boolean;
   departments?: { id: string; name: string }[];
+  departmentMembersMap?: Record<string, { id: string; fullName: string }[]>;
   subordinates: Subordinate[];
   comments?: CommentItem[];
   activity?: ActivityItem[];
@@ -182,8 +184,10 @@ export function TaskDetail({
   isBossOfCreator,
   isBossOfDepartment,
   isAdmin = false,
+  isExecutive = false,
   canEditDevFields = false,
   departments = [],
+  departmentMembersMap = {},
   subordinates,
   comments = [],
   activity = [],
@@ -216,10 +220,24 @@ export function TaskDetail({
   const [editCategory, setEditCategory] = useState<string>(task.category ?? "none");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
 
-  const editDeptName = isAdmin
-    ? (departments.find((d) => d.id === editDepartment)?.name ?? null)
-    : task.departmentName;
+  const editDeptName =
+    editDepartment === "none"
+      ? null
+      : (departments.find((d) => d.id === editDepartment)?.name ??
+        (editDepartment === task.departmentId ? task.departmentName : null));
   const isDevSelected = editDeptName === "Development";
+
+  // Members the current user may assign into the selected department. The map is
+  // only populated for departments the user manages: their own (if boss) or all
+  // of them (Executive / admin).
+  const selectedDeptMembers =
+    editDepartment === "none" ? [] : (departmentMembersMap[editDepartment] ?? []);
+  const deptChangedInForm = editDepartment !== (task.departmentId || "none");
+  // Only Executive members (and admin) may assign someone inside a *new*
+  // department. Bosses can still (re)assign within their own department as long
+  // as they don't move the task elsewhere.
+  const canAssignInSelectedDept =
+    selectedDeptMembers.length > 0 && (!deptChangedInForm || isExecutive || isAdmin);
 
   function handleEditDepartmentChange(value: string) {
     setEditDepartment(value);
@@ -227,6 +245,13 @@ export function TaskDetail({
     if (name !== "Development") {
       setEditWaitingForBundle(false);
       setEditDevTarget("none");
+    }
+    // Moving the task to a different department drops the current assignee,
+    // since they belong to the previous department.
+    if (value !== (task.departmentId || "none")) {
+      setEditAssignee("unassigned");
+    } else {
+      setEditAssignee(task.assignedTo || "unassigned");
     }
   }
 
@@ -254,15 +279,16 @@ export function TaskDetail({
   async function handleSave() {
     setSaving(true);
     try {
+      const nextDepartmentId = editDepartment === "none" ? null : editDepartment;
       await updateTask(task.id, {
         title: title.trim(),
         description: description.trim() || null,
         priority,
         status,
+        // The server drops the assignee on a department change unless the user is
+        // Executive/admin and the person belongs to the new department.
         assignedTo: editAssignee === "unassigned" ? null : editAssignee,
-        ...(isAdmin
-          ? { departmentId: editDepartment === "none" ? null : editDepartment }
-          : {}),
+        departmentId: nextDepartmentId,
       });
 
       if (canEditDevFields && isDevSelected) {
@@ -903,7 +929,7 @@ export function TaskDetail({
 
                 <div className="space-y-1.5">
                   <Label>Department</Label>
-                  {isAdmin && departments.length > 0 ? (
+                  {departments.length > 0 ? (
                     <Select value={editDepartment} onValueChange={handleEditDepartmentChange}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a department..." />
@@ -924,9 +950,15 @@ export function TaskDetail({
                       className="w-full"
                     />
                   )}
+                  {task.assignedTo &&
+                    editDepartment !== (task.departmentId || "none") && (
+                      <p className="text-xs text-amber-600 dark:text-amber-500">
+                        Changing the department will unassign {task.assignee?.fullName ?? "the current assignee"}.
+                      </p>
+                    )}
                 </div>
 
-                {subordinates.length > 0 && (
+                {canAssignInSelectedDept && (
                   <div className="space-y-1.5">
                     <Label>Assign To</Label>
                     <Select value={editAssignee} onValueChange={setEditAssignee}>
@@ -935,13 +967,16 @@ export function TaskDetail({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="unassigned">Unassigned</SelectItem>
-                        {subordinates.map((u) => (
+                        {selectedDeptMembers.map((u) => (
                           <SelectItem key={u.id} value={u.id}>
                             {u.fullName}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Assign this task to a member of the selected department.
+                    </p>
                   </div>
                 )}
               </div>

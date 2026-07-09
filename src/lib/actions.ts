@@ -46,6 +46,14 @@ function isAdminUser(user: { email?: string | null }) {
   return user.email === ADMIN_EMAIL;
 }
 
+async function isExecutiveMember(userId: string) {
+  const ud = await db.query.userDepartment.findFirst({
+    where: eq(userDepartment.userId, userId),
+    with: { department: { columns: { name: true } } },
+  });
+  return ud?.department?.name?.toLowerCase() === "executive";
+}
+
 async function verifyTaskOwner(taskId: string, userId: string) {
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
@@ -634,8 +642,31 @@ export async function updateTask(
   });
   if (!task) throw new Error("Task not found");
 
-  // Any authenticated user who can view the task may edit it.
-  // (Changing the department stays admin-only — enforced below.)
+  // Any authenticated user who can view the task may edit it, including the
+  // department. When the department changes we drop the current assignee, since
+  // that person belongs to the previous department. Only Executive members (and
+  // admin) may pick a new assignee inside the destination department; everyone
+  // else can only move the task away, leaving it unassigned.
+  const deptChanged =
+    data.departmentId !== undefined && data.departmentId !== task.departmentId;
+
+  let effectiveAssignedTo = data.assignedTo;
+  if (deptChanged) {
+    const canAssignInNewDept = isAdminUser(user) || (await isExecutiveMember(user.id));
+    if (canAssignInNewDept && data.assignedTo && data.departmentId) {
+      // Validate the chosen assignee actually belongs to the new department.
+      const membership = await db.query.userDepartment.findFirst({
+        where: and(
+          eq(userDepartment.userId, data.assignedTo),
+          eq(userDepartment.departmentId, data.departmentId)
+        ),
+        columns: { userId: true },
+      });
+      effectiveAssignedTo = membership ? data.assignedTo : null;
+    } else {
+      effectiveAssignedTo = null;
+    }
+  }
 
   const now = new Date();
   const updatePayload: Record<string, unknown> = {
@@ -643,7 +674,7 @@ export async function updateTask(
     description: data.description,
     priority: data.priority,
     status: data.status,
-    assignedTo: data.assignedTo,
+    assignedTo: effectiveAssignedTo,
     updatedAt: now,
   };
 
@@ -653,7 +684,7 @@ export async function updateTask(
     updatePayload.completedAt = null;
   }
 
-  if (data.departmentId !== undefined && isAdminUser(user)) {
+  if (data.departmentId !== undefined) {
     updatePayload.departmentId = data.departmentId;
 
     // Dev-only fields only make sense for the Development department.
@@ -710,10 +741,10 @@ export async function updateTask(
       newValue: STATUS_LABELS[data.status] ?? data.status,
     });
   }
-  if (task.assignedTo !== data.assignedTo) {
+  if (task.assignedTo !== effectiveAssignedTo) {
     const [oldName, newName] = await Promise.all([
       getUserName(task.assignedTo),
-      getUserName(data.assignedTo),
+      getUserName(effectiveAssignedTo),
     ]);
     await recordActivity(taskId, user.id, {
       action: "assignee_changed",
@@ -722,11 +753,7 @@ export async function updateTask(
       newValue: newName,
     });
   }
-  if (
-    data.departmentId !== undefined &&
-    isAdminUser(user) &&
-    task.departmentId !== data.departmentId
-  ) {
+  if (deptChanged) {
     const [oldName, newName] = await Promise.all([
       getDepartmentName(task.departmentId),
       getDepartmentName(data.departmentId),
