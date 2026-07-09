@@ -208,6 +208,7 @@ export const recurringTasks = pgTable("tm_recurring_tasks", {
     .default(sql`gen_random_uuid()`),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
+  instructions: text("instructions"),
   departmentId: varchar("department_id")
     .notNull()
     .references(() => departments.id),

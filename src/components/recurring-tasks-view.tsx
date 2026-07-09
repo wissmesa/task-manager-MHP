@@ -1,8 +1,14 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -94,7 +100,26 @@ function dueSoonKey(task: RecurringTaskDTO): number {
 }
 
 export function RecurringTasksView({ tasks, currentUserName }: RecurringTasksViewProps) {
-  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const [selectedDeptId, setSelectedDeptIdState] = useState<string | null>(
+    () => searchParams.get("dept")
+  );
+
+  // Keep the selected department in the URL (?dept=<id>) without a full
+  // navigation, so returning from a task detail lands back on this view.
+  const setSelectedDeptId = useCallback(
+    (id: string | null) => {
+      setSelectedDeptIdState(id);
+      const params = new URLSearchParams(searchParams.toString());
+      if (id) params.set("dept", id);
+      else params.delete("dept");
+      const qs = params.toString();
+      window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+    },
+    [searchParams, pathname]
+  );
+
   const [search, setSearch] = useState("");
   const [collapsedFreqs, setCollapsedFreqs] = useState<
     Record<RecurringTaskDTO["frequency"], boolean>
@@ -238,9 +263,12 @@ export function RecurringTasksView({ tasks, currentUserName }: RecurringTasksVie
               variant="outline"
               size="sm"
               className="gap-1.5"
-              onClick={() =>
-                setLayout((l) => (l === "rows" ? "board" : "rows"))
-              }
+              onClick={() => {
+                setLayout((l) => (l === "rows" ? "board" : "rows"));
+                // Re-expand groups so switching layouts never leaves empty
+                // collapsed columns/rows behind.
+                setCollapsedFreqs({ daily: false, weekly: false, monthly: false });
+              }}
               title={
                 layout === "rows"
                   ? "Show frequencies as columns"

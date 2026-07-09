@@ -69,6 +69,7 @@ export function RecurringTaskDetail({
 
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description ?? "");
+  const [instructions, setInstructions] = useState(task.instructions ?? "");
   const [departmentId, setDepartmentId] = useState(task.departmentId);
   const [assignedTo, setAssignedTo] = useState(task.assignedTo ?? "none");
   const [frequency, setFrequency] = useState<RecurrenceFrequency>(task.frequency);
@@ -81,6 +82,7 @@ export function RecurringTaskDetail({
   function resetForm() {
     setTitle(task.title);
     setDescription(task.description ?? "");
+    setInstructions(task.instructions ?? "");
     setDepartmentId(task.departmentId);
     setAssignedTo(task.assignedTo ?? "none");
     setFrequency(task.frequency);
@@ -104,6 +106,7 @@ export function RecurringTaskDetail({
       await updateRecurringTask(task.id, {
         title: title.trim(),
         description: description.trim() || undefined,
+        instructions: instructions.trim() || undefined,
         departmentId,
         assignedTo: assignedTo === "none" ? null : assignedTo,
         frequency,
@@ -140,7 +143,7 @@ export function RecurringTaskDetail({
           variant="ghost"
           className="w-fit gap-2 px-2 text-muted-foreground"
         >
-          <Link href="/recurring">
+          <Link href={`/recurring?dept=${task.departmentId}`}>
             <ArrowLeft className="h-4 w-4" />
             Back
           </Link>
@@ -213,6 +216,20 @@ export function RecurringTaskDetail({
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="instructions">Instructions</Label>
+                <Textarea
+                  id="instructions"
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="Step-by-step instructions on how to complete this task..."
+                  rows={5}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional. Steps or guidelines to complete this task.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -351,6 +368,18 @@ export function RecurringTaskDetail({
               ) : (
                 <p className="text-sm text-muted-foreground">No description.</p>
               )}
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <p className="mb-2 text-sm font-semibold">Instructions</p>
+                {task.instructions ? (
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                    {task.instructions}
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No instructions provided.
+                  </p>
+                )}
+              </div>
               <div className="text-xs text-muted-foreground">
                 Created by {task.creatorName ?? "Unknown"} ·{" "}
                 {new Date(task.createdAt).toLocaleDateString("en-US", {

@@ -316,6 +316,11 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS tm_recurring_completions_task_idx ON tm_recurring_task_completions(recurring_task_id);
   `;
 
+  console.log("Adding instructions column to tm_recurring_tasks...");
+  await sql`
+    ALTER TABLE tm_recurring_tasks ADD COLUMN IF NOT EXISTS instructions TEXT;
+  `;
+
   console.log("Migration complete!");
 }
 

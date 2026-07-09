@@ -45,6 +45,7 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [departmentId, setDepartmentId] = useState("none");
   const [assignedTo, setAssignedTo] = useState("none");
   const [frequency, setFrequency] = useState<RecurrenceFrequency>("weekly");
@@ -74,6 +75,7 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
       await createRecurringTask({
         title: title.trim(),
         description: description.trim() || undefined,
+        instructions: instructions.trim() || undefined,
         departmentId,
         assignedTo,
         frequency,
@@ -119,6 +121,20 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
               placeholder="What needs to be done each period..."
               rows={4}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="instructions">Instructions</Label>
+            <Textarea
+              id="instructions"
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder="Step-by-step instructions on how to complete this task..."
+              rows={5}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. Steps or guidelines to complete this task.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

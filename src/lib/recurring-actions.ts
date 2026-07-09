@@ -6,11 +6,63 @@ import {
   recurringTaskCompletions,
   departments,
   userDepartment,
+  users,
 } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { and, eq, inArray, or, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { isValidPeriodKey, type RecurrenceFrequency } from "@/lib/recurrence";
+import {
+  isValidPeriodKey,
+  describeRecurrence,
+  type RecurrenceFrequency,
+} from "@/lib/recurrence";
+import { sendRecurringTaskAssignedEmail } from "@/lib/mail";
+
+function recurringTaskUrl(id: string): string {
+  const baseUrl =
+    process.env.NEXTAUTH_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  return `${baseUrl}/recurring/${id}`;
+}
+
+/** Notify the assigned user that a recurring task was assigned to them. */
+async function notifyRecurringAssignee(input: {
+  taskId: string;
+  assigneeId: string;
+  assignerId: string;
+  assignerName: string;
+  departmentId: string;
+  title: string;
+  frequency: RecurrenceFrequency;
+  dueWeekday: number | null;
+  dueDayOfMonth: number | null;
+}): Promise<void> {
+  // Don't email people about tasks they assigned to themselves.
+  if (input.assigneeId === input.assignerId) return;
+
+  const assignee = await db.query.users.findFirst({
+    where: eq(users.id, input.assigneeId),
+    columns: { email: true, fullName: true },
+  });
+  if (!assignee?.email) return;
+
+  const dept = await db.query.departments.findFirst({
+    where: eq(departments.id, input.departmentId),
+    columns: { name: true },
+  });
+
+  await sendRecurringTaskAssignedEmail(assignee.email, assignee.fullName, {
+    taskTitle: input.title,
+    creatorName: input.assignerName,
+    departmentName: dept?.name ?? null,
+    recurrence: describeRecurrence(
+      input.frequency,
+      input.dueWeekday,
+      input.dueDayOfMonth
+    ),
+    taskUrl: recurringTaskUrl(input.taskId),
+  });
+}
 
 const ADMIN_EMAIL = "luis@bluepaperclip.com";
 
@@ -20,6 +72,7 @@ export interface RecurringTaskDTO {
   id: string;
   title: string;
   description: string | null;
+  instructions: string | null;
   departmentId: string;
   departmentName: string | null;
   frequency: RecurrenceFrequency;
@@ -194,6 +247,7 @@ export async function getRecurringTasksForUser(): Promise<RecurringTaskDTO[]> {
     id: r.id,
     title: r.title,
     description: r.description,
+    instructions: r.instructions,
     departmentId: r.departmentId,
     departmentName: r.department?.name ?? null,
     frequency: r.frequency,
@@ -244,6 +298,7 @@ export async function getRecurringTaskById(
     id: r.id,
     title: r.title,
     description: r.description,
+    instructions: r.instructions,
     departmentId: r.departmentId,
     departmentName: r.department?.name ?? null,
     frequency: r.frequency,
@@ -271,6 +326,7 @@ export async function updateRecurringTask(
   input: {
     title: string;
     description?: string;
+    instructions?: string;
     departmentId: string;
     frequency: RecurrenceFrequency;
     dueWeekday?: number | null;
@@ -283,7 +339,13 @@ export async function updateRecurringTask(
 
   const task = await db.query.recurringTasks.findFirst({
     where: eq(recurringTasks.id, id),
-    columns: { id: true, departmentId: true, createdBy: true, frequency: true },
+    columns: {
+      id: true,
+      departmentId: true,
+      createdBy: true,
+      frequency: true,
+      assignedTo: true,
+    },
   });
   if (!task) throw new Error("Recurring task not found");
 
@@ -313,6 +375,7 @@ export async function updateRecurringTask(
     .set({
       title,
       description: input.description?.trim() || null,
+      instructions: input.instructions?.trim() || null,
       departmentId: input.departmentId,
       assignedTo: input.assignedTo || null,
       frequency: input.frequency,
@@ -329,6 +392,22 @@ export async function updateRecurringTask(
       .where(eq(recurringTaskCompletions.recurringTaskId, id));
   }
 
+  // Notify the new responsible only when the assignee actually changed.
+  const newAssignee = input.assignedTo || null;
+  if (newAssignee && newAssignee !== task.assignedTo) {
+    await notifyRecurringAssignee({
+      taskId: id,
+      assigneeId: newAssignee,
+      assignerId: session.user.id,
+      assignerName: session.user.name ?? session.user.email ?? "Someone",
+      departmentId: input.departmentId,
+      title,
+      frequency: input.frequency,
+      dueWeekday,
+      dueDayOfMonth,
+    });
+  }
+
   revalidatePath("/recurring");
   revalidatePath(`/recurring/${id}`);
 }
@@ -336,6 +415,7 @@ export async function updateRecurringTask(
 export async function createRecurringTask(input: {
   title: string;
   description?: string;
+  instructions?: string;
   departmentId: string;
   frequency: RecurrenceFrequency;
   dueWeekday?: number | null;
@@ -370,6 +450,7 @@ export async function createRecurringTask(input: {
     .values({
       title,
       description: input.description?.trim() || null,
+      instructions: input.instructions?.trim() || null,
       departmentId: input.departmentId,
       createdBy: session.user.id,
       assignedTo: input.assignedTo || null,
@@ -378,6 +459,20 @@ export async function createRecurringTask(input: {
       dueDayOfMonth,
     })
     .returning();
+
+  if (input.assignedTo) {
+    await notifyRecurringAssignee({
+      taskId: row.id,
+      assigneeId: input.assignedTo,
+      assignerId: session.user.id,
+      assignerName: session.user.name ?? session.user.email ?? "Someone",
+      departmentId: input.departmentId,
+      title,
+      frequency: input.frequency,
+      dueWeekday,
+      dueDayOfMonth,
+    });
+  }
 
   revalidatePath("/recurring");
   return row.id;

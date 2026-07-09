@@ -132,6 +132,82 @@ export async function sendTaskCreatedEmail(
   }
 }
 
+interface RecurringAssignedNotificationData {
+  taskTitle: string;
+  creatorName: string;
+  departmentName: string | null;
+  recurrence: string;
+  taskUrl: string;
+}
+
+export async function sendRecurringTaskAssignedEmail(
+  recipientEmail: string,
+  recipientName: string,
+  data: RecurringAssignedNotificationData
+) {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.warn("SENDGRID_API_KEY not configured — skipping email notification");
+    return;
+  }
+
+  init();
+
+  const subject = `🔁 Recurring Task Assigned: ${data.taskTitle}`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: #f8fafc; border-radius: 12px; padding: 24px; border: 1px solid #e2e8f0;">
+        <h2 style="margin: 0 0 16px; color: #1e293b; font-size: 20px;">Recurring Task Assigned to You</h2>
+
+        <p style="margin: 0 0 16px; color: #475569;">
+          Hi <strong>${recipientName}</strong>, you have been made responsible for a recurring task by <strong>${data.creatorName}</strong>.
+        </p>
+
+        <div style="background: white; border-radius: 8px; padding: 16px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px; width: 120px;">Task</td>
+              <td style="padding: 8px 0; color: #1e293b; font-weight: 600;">${data.taskTitle}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Recurrence</td>
+              <td style="padding: 8px 0; color: #1e293b;">${data.recurrence}</td>
+            </tr>
+            ${data.departmentName ? `
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Department</td>
+              <td style="padding: 8px 0; color: #1e293b;">${data.departmentName}</td>
+            </tr>` : ""}
+            <tr>
+              <td style="padding: 8px 0; color: #64748b; font-size: 14px;">Assigned by</td>
+              <td style="padding: 8px 0; color: #1e293b;">${data.creatorName}</td>
+            </tr>
+          </table>
+        </div>
+
+        <a href="${data.taskUrl}" style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; font-size: 14px;">
+          View Task
+        </a>
+      </div>
+
+      <p style="margin: 16px 0 0; color: #94a3b8; font-size: 12px; text-align: center;">
+        Task Manager — MHP Sales Manager
+      </p>
+    </div>
+  `;
+
+  try {
+    await sgMail.send({
+      to: recipientEmail,
+      from: FROM_ADDRESS(),
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.error("Failed to send recurring task assignment email:", err);
+  }
+}
+
 interface StatusChangeNotificationData {
   taskTitle: string;
   taskUrl: string;
