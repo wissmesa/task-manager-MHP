@@ -51,7 +51,7 @@ import {
   deleteRecurringTaskComment,
   type RecurringTaskDTO,
 } from "@/lib/recurring-actions";
-import { uploadRecurringImages } from "@/lib/upload-images";
+import { uploadImages } from "@/lib/upload-images";
 import {
   FREQUENCIES,
   FREQUENCY_LABELS,
@@ -159,7 +159,7 @@ export function RecurringTaskDetail({
     try {
       const imageKeys =
         pendingImages.length > 0
-          ? await uploadRecurringImages(pendingImages.map((i) => i.file))
+          ? await uploadImages(pendingImages.map((i) => i.file))
           : undefined;
       await updateRecurringTask(task.id, {
         title: title.trim(),
@@ -525,7 +525,7 @@ export function RecurringTaskDetail({
                             />
                           </button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-3xl p-0">
+                        <DialogContent className="w-[95vw] max-w-6xl p-2 sm:max-w-6xl sm:p-3">
                           <DialogTitle className="sr-only">
                             {img.originalName}
                           </DialogTitle>
@@ -533,7 +533,7 @@ export function RecurringTaskDetail({
                           <img
                             src={img.imageUrl}
                             alt={img.originalName}
-                            className="h-auto w-full rounded-lg"
+                            className="mx-auto h-auto max-h-[85vh] w-full rounded-lg object-contain"
                           />
                         </DialogContent>
                       </Dialog>
@@ -574,7 +574,7 @@ export function RecurringTaskDetail({
           activity={activity}
           onAddComment={addRecurringTaskComment}
           onDeleteComment={deleteRecurringTaskComment}
-          onUploadImages={uploadRecurringImages}
+          onUploadImages={uploadImages}
         />
       )}
     </div>

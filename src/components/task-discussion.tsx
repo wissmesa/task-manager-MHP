@@ -370,7 +370,7 @@ export function TaskDiscussion({
                                     />
                                   </button>
                                 </DialogTrigger>
-                                <DialogContent className="max-w-3xl p-0">
+                                <DialogContent className="w-[95vw] max-w-6xl p-2 sm:max-w-6xl sm:p-3">
                                   <DialogTitle className="sr-only">
                                     {img.originalName}
                                   </DialogTitle>
@@ -378,7 +378,7 @@ export function TaskDiscussion({
                                   <img
                                     src={img.imageUrl}
                                     alt={img.originalName}
-                                    className="h-auto w-full rounded-lg"
+                                    className="mx-auto h-auto max-h-[85vh] w-full rounded-lg object-contain"
                                   />
                                 </DialogContent>
                               </Dialog>

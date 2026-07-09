@@ -280,6 +280,20 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS tm_task_comments_task_id_idx ON tm_task_comments(task_id);
   `;
 
+  console.log("Creating tm_task_comment_images table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_task_comment_images (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      comment_id VARCHAR NOT NULL REFERENCES tm_task_comments(id) ON DELETE CASCADE,
+      image_url VARCHAR NOT NULL,
+      original_name VARCHAR NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_task_comment_images_comment_idx ON tm_task_comment_images(comment_id);
+  `;
+
   console.log("Creating tm_recurring_tasks table...");
   await sql`
     CREATE TABLE IF NOT EXISTS tm_recurring_tasks (

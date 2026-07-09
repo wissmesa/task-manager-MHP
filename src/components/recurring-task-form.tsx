@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/card";
 import { ImagePlus, Loader2, Repeat, X } from "lucide-react";
 import { createRecurringTask } from "@/lib/recurring-actions";
-import { uploadRecurringImages } from "@/lib/upload-images";
+import { uploadImages } from "@/lib/upload-images";
 import {
   FREQUENCIES,
   FREQUENCY_LABELS,
@@ -97,7 +97,7 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
     try {
       const imageKeys =
         pendingImages.length > 0
-          ? await uploadRecurringImages(pendingImages.map((i) => i.file))
+          ? await uploadImages(pendingImages.map((i) => i.file))
           : undefined;
       await createRecurringTask({
         title: title.trim(),

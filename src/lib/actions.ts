@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { tasks, taskImages, users, userHierarchy, departments, userDepartment, taskActivity, taskComments } from "@/db/schema";
+import { tasks, taskImages, users, userHierarchy, departments, userDepartment, taskActivity, taskComments, taskCommentImages } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { eq, desc, asc, inArray, and, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -1304,25 +1304,36 @@ export async function getTaskComments(taskId: string) {
 
   const rows = await db.query.taskComments.findMany({
     where: eq(taskComments.taskId, taskId),
-    with: { user: { columns: { id: true, fullName: true, email: true } } },
+    with: {
+      user: { columns: { id: true, fullName: true, email: true } },
+      images: { columns: { id: true, imageUrl: true, originalName: true } },
+    },
     orderBy: [asc(taskComments.createdAt)],
   });
 
-  return rows.map((c) => ({
-    id: c.id,
-    content: c.content,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-    userId: c.userId,
-    author: c.user ? { id: c.user.id, fullName: c.user.fullName, email: c.user.email } : null,
-  }));
+  return Promise.all(
+    rows.map(async (c) => ({
+      id: c.id,
+      content: c.content,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      userId: c.userId,
+      author: c.user ? { id: c.user.id, fullName: c.user.fullName, email: c.user.email } : null,
+      images: await resolveImageUrls(c.images),
+    }))
+  );
 }
 
-export async function addTaskComment(taskId: string, content: string) {
+export async function addTaskComment(
+  taskId: string,
+  content: string,
+  imageKeys?: { s3Key: string; originalName: string }[]
+) {
   const user = await requireAuth();
 
   const trimmed = content.trim();
-  if (!trimmed) throw new Error("Comment cannot be empty");
+  const hasImages = !!imageKeys && imageKeys.length > 0;
+  if (!trimmed && !hasImages) throw new Error("Comment cannot be empty");
   if (trimmed.length > 5000) throw new Error("Comment is too long");
 
   // Any authenticated user who can view the task may comment.
@@ -1332,11 +1343,24 @@ export async function addTaskComment(taskId: string, content: string) {
   });
   if (!task) throw new Error("Task not found");
 
-  await db.insert(taskComments).values({
-    taskId,
-    userId: user.id,
-    content: trimmed,
-  });
+  const [comment] = await db
+    .insert(taskComments)
+    .values({
+      taskId,
+      userId: user.id,
+      content: trimmed,
+    })
+    .returning();
+
+  if (hasImages) {
+    await db.insert(taskCommentImages).values(
+      imageKeys!.map((img) => ({
+        commentId: comment.id,
+        imageUrl: img.s3Key,
+        originalName: img.originalName,
+      }))
+    );
+  }
 
   revalidatePath(`/tasks/${taskId}`);
 }

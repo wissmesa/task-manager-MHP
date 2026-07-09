@@ -208,6 +208,72 @@ export async function sendRecurringTaskAssignedEmail(
   }
 }
 
+interface RecurringCommentNotificationData {
+  taskTitle: string;
+  commenterName: string;
+  commentContent: string;
+  hasImages: boolean;
+  taskUrl: string;
+}
+
+export async function sendRecurringTaskCommentEmail(
+  recipientEmail: string,
+  recipientName: string,
+  data: RecurringCommentNotificationData
+) {
+  if (!process.env.SENDGRID_API_KEY) {
+    console.warn("SENDGRID_API_KEY not configured — skipping email notification");
+    return;
+  }
+
+  init();
+
+  const subject = `💬 New comment on: ${data.taskTitle}`;
+
+  const preview = data.commentContent.trim()
+    ? data.commentContent.trim()
+    : data.hasImages
+      ? "(shared a photo)"
+      : "";
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background: #f8fafc; border-radius: 12px; padding: 24px; border: 1px solid #e2e8f0;">
+        <h2 style="margin: 0 0 16px; color: #1e293b; font-size: 20px;">New Comment on a Recurring Task</h2>
+
+        <p style="margin: 0 0 16px; color: #475569;">
+          Hi <strong>${recipientName}</strong>, <strong>${data.commenterName}</strong> left a comment on the recurring task <strong>${data.taskTitle}</strong>.
+        </p>
+
+        ${preview ? `
+        <div style="background: white; border-radius: 8px; padding: 16px; border: 1px solid #e2e8f0; margin-bottom: 16px;">
+          <p style="margin: 0; color: #1e293b; white-space: pre-wrap;">${preview}</p>
+          ${data.commentContent.trim() && data.hasImages ? `<p style="margin: 8px 0 0; color: #64748b; font-size: 13px;">📎 Includes a photo attachment.</p>` : ""}
+        </div>` : ""}
+
+        <a href="${data.taskUrl}" style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 10px 24px; border-radius: 8px; font-weight: 500; font-size: 14px;">
+          View Task
+        </a>
+      </div>
+
+      <p style="margin: 16px 0 0; color: #94a3b8; font-size: 12px; text-align: center;">
+        Task Manager — MHP Sales Manager
+      </p>
+    </div>
+  `;
+
+  try {
+    await sgMail.send({
+      to: recipientEmail,
+      from: FROM_ADDRESS(),
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.error("Failed to send recurring task comment email:", err);
+  }
+}
+
 interface StatusChangeNotificationData {
   taskTitle: string;
   taskUrl: string;

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory, addTaskComment } from "@/lib/actions";
 import {
   EFFORT_OPTIONS,
   EFFORT_COLORS,
@@ -84,6 +84,7 @@ import {
   type TaskPlanningStage,
 } from "@/lib/task-planning";
 import { TaskDiscussion, type CommentItem, type ActivityItem } from "@/components/task-discussion";
+import { uploadImages } from "@/lib/upload-images";
 
 interface TaskImage {
   id: string;
@@ -1083,6 +1084,8 @@ export function TaskDetail({
           isAdmin={isAdmin}
           comments={comments}
           activity={activity}
+          onAddComment={addTaskComment}
+          onUploadImages={uploadImages}
         />
       )}
     </div>

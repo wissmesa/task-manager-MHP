@@ -20,7 +20,10 @@ import {
   describeRecurrence,
   type RecurrenceFrequency,
 } from "@/lib/recurrence";
-import { sendRecurringTaskAssignedEmail } from "@/lib/mail";
+import {
+  sendRecurringTaskAssignedEmail,
+  sendRecurringTaskCommentEmail,
+} from "@/lib/mail";
 import { getSignedImageUrl } from "@/lib/s3";
 
 /** An image attachment as stored (S3 key). */
@@ -786,7 +789,13 @@ export async function addRecurringTaskComment(
 
   const task = await db.query.recurringTasks.findFirst({
     where: eq(recurringTasks.id, recurringTaskId),
-    columns: { id: true, departmentId: true, assignedTo: true, createdBy: true },
+    columns: {
+      id: true,
+      title: true,
+      departmentId: true,
+      assignedTo: true,
+      createdBy: true,
+    },
   });
   if (!task) throw new Error("Recurring task not found");
 
@@ -813,7 +822,96 @@ export async function addRecurringTaskComment(
     );
   }
 
+  // Notify everyone involved with the task about the new comment:
+  //  - the assignee (person in charge) and the task creator,
+  //  - the supervisor (boss) of each involved area (commenter's, assignee's,
+  //    creator's and the task's department),
+  //  - always excluding whoever wrote the comment.
+  await notifyRecurringComment({
+    task,
+    commenterId: session.user.id,
+    commenterName: session.user.name ?? session.user.email ?? "Someone",
+    content: trimmed,
+    hasImages,
+  });
+
   revalidatePath(`/recurring/${recurringTaskId}`);
+}
+
+/**
+ * Emails the assignee, the creator and the supervisor of every involved area
+ * (excluding whoever wrote the comment) so everyone stays informed.
+ */
+async function notifyRecurringComment(input: {
+  task: {
+    id: string;
+    title: string;
+    departmentId: string;
+    assignedTo: string | null;
+    createdBy: string;
+  };
+  commenterId: string;
+  commenterName: string;
+  content: string;
+  hasImages: boolean;
+}): Promise<void> {
+  const { task, commenterId } = input;
+
+  // People directly involved (used both as recipients and to resolve areas).
+  const involvedUserIds = [...new Set(
+    [commenterId, task.assignedTo, task.createdBy].filter(
+      (id): id is string => !!id
+    )
+  )];
+
+  // Departments of the involved people + the task's own department.
+  const departmentIds = new Set<string>([task.departmentId]);
+  if (involvedUserIds.length > 0) {
+    const memberships = await db.query.userDepartment.findMany({
+      where: inArray(userDepartment.userId, involvedUserIds),
+      columns: { departmentId: true },
+    });
+    memberships.forEach((m) => departmentIds.add(m.departmentId));
+  }
+
+  // Supervisors (bosses) of every involved area.
+  const bossIds: string[] = [];
+  if (departmentIds.size > 0) {
+    const depts = await db.query.departments.findMany({
+      where: inArray(departments.id, [...departmentIds]),
+      columns: { bossId: true },
+    });
+    depts.forEach((d) => {
+      if (d.bossId) bossIds.push(d.bossId);
+    });
+  }
+
+  // Final recipients: assignee + creator + supervisors, minus the commenter.
+  const recipientIds = [...new Set(
+    [task.assignedTo, task.createdBy, ...bossIds].filter(
+      (id): id is string => !!id && id !== commenterId
+    )
+  )];
+  if (recipientIds.length === 0) return;
+
+  const recipients = await db.query.users.findMany({
+    where: inArray(users.id, recipientIds),
+    columns: { email: true, fullName: true },
+  });
+
+  await Promise.all(
+    recipients
+      .filter((r) => !!r.email)
+      .map((r) =>
+        sendRecurringTaskCommentEmail(r.email, r.fullName, {
+          taskTitle: task.title,
+          commenterName: input.commenterName,
+          commentContent: input.content,
+          hasImages: input.hasImages,
+          taskUrl: recurringTaskUrl(task.id),
+        })
+      )
+  );
 }
 
 export async function deleteRecurringTaskComment(commentId: string): Promise<void> {

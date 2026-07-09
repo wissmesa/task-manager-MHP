@@ -202,6 +202,19 @@ export const taskComments = pgTable("tm_task_comments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Images attached to a regular task comment.
+export const taskCommentImages = pgTable("tm_task_comment_images", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id")
+    .notNull()
+    .references(() => taskComments.id, { onDelete: "cascade" }),
+  imageUrl: varchar("image_url").notNull(),
+  originalName: varchar("original_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const recurringTasks = pgTable("tm_recurring_tasks", {
   id: varchar("id")
     .primaryKey()
@@ -335,10 +348,21 @@ export const taskActivityRelations = relations(taskActivity, ({ one }) => ({
   user: one(users, { fields: [taskActivity.userId], references: [users.id] }),
 }));
 
-export const taskCommentsRelations = relations(taskComments, ({ one }) => ({
+export const taskCommentsRelations = relations(taskComments, ({ one, many }) => ({
   task: one(tasks, { fields: [taskComments.taskId], references: [tasks.id] }),
   user: one(users, { fields: [taskComments.userId], references: [users.id] }),
+  images: many(taskCommentImages),
 }));
+
+export const taskCommentImagesRelations = relations(
+  taskCommentImages,
+  ({ one }) => ({
+    comment: one(taskComments, {
+      fields: [taskCommentImages.commentId],
+      references: [taskComments.id],
+    }),
+  })
+);
 
 export const recurringTasksRelations = relations(recurringTasks, ({ one, many }) => ({
   creator: one(users, { fields: [recurringTasks.createdBy], references: [users.id] }),
