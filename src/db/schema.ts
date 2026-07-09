@@ -258,6 +258,32 @@ export const recurringTaskComments = pgTable("tm_recurring_task_comments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Images attached to a recurring task's instructions.
+export const recurringTaskImages = pgTable("tm_recurring_task_images", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  recurringTaskId: varchar("recurring_task_id")
+    .notNull()
+    .references(() => recurringTasks.id, { onDelete: "cascade" }),
+  imageUrl: varchar("image_url").notNull(),
+  originalName: varchar("original_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Images attached to a recurring task comment.
+export const recurringCommentImages = pgTable("tm_recurring_comment_images", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id")
+    .notNull()
+    .references(() => recurringTaskComments.id, { onDelete: "cascade" }),
+  imageUrl: varchar("image_url").notNull(),
+  originalName: varchar("original_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const recurringTaskCompletions = pgTable("tm_recurring_task_completions", {
   id: varchar("id")
     .primaryKey()
@@ -324,7 +350,28 @@ export const recurringTasksRelations = relations(recurringTasks, ({ one, many })
   completions: many(recurringTaskCompletions),
   activity: many(recurringTaskActivity),
   comments: many(recurringTaskComments),
+  images: many(recurringTaskImages),
 }));
+
+export const recurringTaskImagesRelations = relations(
+  recurringTaskImages,
+  ({ one }) => ({
+    recurringTask: one(recurringTasks, {
+      fields: [recurringTaskImages.recurringTaskId],
+      references: [recurringTasks.id],
+    }),
+  })
+);
+
+export const recurringCommentImagesRelations = relations(
+  recurringCommentImages,
+  ({ one }) => ({
+    comment: one(recurringTaskComments, {
+      fields: [recurringCommentImages.commentId],
+      references: [recurringTaskComments.id],
+    }),
+  })
+);
 
 export const recurringTaskActivityRelations = relations(
   recurringTaskActivity,
@@ -342,7 +389,7 @@ export const recurringTaskActivityRelations = relations(
 
 export const recurringTaskCommentsRelations = relations(
   recurringTaskComments,
-  ({ one }) => ({
+  ({ one, many }) => ({
     recurringTask: one(recurringTasks, {
       fields: [recurringTaskComments.recurringTaskId],
       references: [recurringTasks.id],
@@ -351,6 +398,7 @@ export const recurringTaskCommentsRelations = relations(
       fields: [recurringTaskComments.userId],
       references: [users.id],
     }),
+    images: many(recurringCommentImages),
   })
 );
 

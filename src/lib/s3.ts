@@ -28,6 +28,15 @@ export function buildS3Key(taskId: string, filename: string) {
   return `${getEnv()}/task-images/${taskId}/${filename}`;
 }
 
+/**
+ * Key for images attached to recurring task instructions or comments.
+ * These may be uploaded before the parent row exists (e.g. a new comment),
+ * so the key is not tied to a specific parent id.
+ */
+export function buildRecurringImageKey(filename: string) {
+  return `${getEnv()}/recurring-images/${filename}`;
+}
+
 export async function uploadToS3(
   key: string,
   body: Buffer,

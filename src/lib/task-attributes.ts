@@ -122,3 +122,41 @@ export const CATEGORY_OPTIONS = TASK_CATEGORIES.map((value) => ({
   value,
   label: CATEGORY_LABELS[value],
 }));
+
+// ── Department colors ─────────────────────────────────────────────────────────
+
+/** Known departments get a fixed color; unknown ones fall back to a hash. */
+const DEPARTMENT_COLORS: Record<string, string> = {
+  development: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400",
+  executive: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+  data: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400",
+  sales_b2b: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  sales_b2c: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
+};
+
+/** Palette used for any department without a fixed color. */
+const DEPARTMENT_FALLBACK_COLORS: string[] = [
+  "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400",
+  "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400",
+  "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
+  "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400",
+  "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400",
+  "bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-400",
+  "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400",
+  "bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900/30 dark:text-fuchsia-400",
+];
+
+/** Returns Tailwind classes for a department badge, consistent per name. */
+export function getDepartmentColor(name: string | null | undefined): string {
+  if (!name) {
+    return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+  }
+  const key = name.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (DEPARTMENT_COLORS[key]) return DEPARTMENT_COLORS[key];
+
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return DEPARTMENT_FALLBACK_COLORS[hash % DEPARTMENT_FALLBACK_COLORS.length];
+}

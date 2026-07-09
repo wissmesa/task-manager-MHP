@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -23,6 +29,7 @@ import {
 } from "@/components/ui/card";
 import {
   ArrowLeft,
+  ImagePlus,
   Loader2,
   Pencil,
   Repeat,
@@ -44,6 +51,7 @@ import {
   deleteRecurringTaskComment,
   type RecurringTaskDTO,
 } from "@/lib/recurring-actions";
+import { uploadRecurringImages } from "@/lib/upload-images";
 import {
   FREQUENCIES,
   FREQUENCY_LABELS,
@@ -92,7 +100,17 @@ export function RecurringTaskDetail({
   const [dueDayOfMonth, setDueDayOfMonth] = useState(String(task.dueDayOfMonth ?? 30));
   const [saving, setSaving] = useState(false);
 
+  // Instruction images: existing (removable) + newly picked (uploaded on save).
+  const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
+  const [pendingImages, setPendingImages] = useState<
+    { file: File; preview: string }[]
+  >([]);
+  const instructionsFileRef = useRef<HTMLInputElement>(null);
+
   const members = membersMap[departmentId] ?? [];
+  const visibleImages = task.images.filter(
+    (img) => !removedImageIds.includes(img.id)
+  );
 
   function resetForm() {
     setTitle(task.title);
@@ -103,6 +121,27 @@ export function RecurringTaskDetail({
     setFrequency(task.frequency);
     setDueWeekday(String(task.dueWeekday ?? 1));
     setDueDayOfMonth(String(task.dueDayOfMonth ?? 30));
+    setRemovedImageIds([]);
+    pendingImages.forEach((i) => URL.revokeObjectURL(i.preview));
+    setPendingImages([]);
+  }
+
+  function handleInstructionFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const picked = Array.from(files)
+      .filter((f) => f.type.startsWith("image/"))
+      .map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setPendingImages((prev) => [...prev, ...picked]);
+    if (instructionsFileRef.current) instructionsFileRef.current.value = "";
+  }
+
+  function removePendingImage(index: number) {
+    setPendingImages((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target.preview);
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   async function handleSave() {
@@ -118,6 +157,10 @@ export function RecurringTaskDetail({
     }
     setSaving(true);
     try {
+      const imageKeys =
+        pendingImages.length > 0
+          ? await uploadRecurringImages(pendingImages.map((i) => i.file))
+          : undefined;
       await updateRecurringTask(task.id, {
         title: title.trim(),
         description: description.trim() || undefined,
@@ -127,7 +170,12 @@ export function RecurringTaskDetail({
         frequency,
         dueWeekday: frequency === "weekly" ? Number(dueWeekday) : null,
         dueDayOfMonth: frequency === "monthly" ? Number(dueDayOfMonth) : null,
+        imageKeys,
+        removedImageIds: removedImageIds.length > 0 ? removedImageIds : undefined,
       });
+      pendingImages.forEach((i) => URL.revokeObjectURL(i.preview));
+      setPendingImages([]);
+      setRemovedImageIds([]);
       setEditing(false);
       router.refresh();
     } catch (err) {
@@ -245,6 +293,72 @@ export function RecurringTaskDetail({
                 <p className="text-xs text-muted-foreground">
                   Optional. Steps or guidelines to complete this task.
                 </p>
+
+                {(visibleImages.length > 0 || pendingImages.length > 0) && (
+                  <div className="flex flex-wrap gap-2">
+                    {visibleImages.map((img) => (
+                      <div
+                        key={img.id}
+                        className="group relative h-20 w-20 overflow-hidden rounded-md border bg-muted"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.imageUrl}
+                          alt={img.originalName}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRemovedImageIds((prev) => [...prev, img.id])
+                          }
+                          className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                          title="Remove image"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    {pendingImages.map((img, i) => (
+                      <div
+                        key={img.preview}
+                        className="group relative h-20 w-20 overflow-hidden rounded-md border bg-muted"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.preview}
+                          alt={img.file.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePendingImage(i)}
+                          className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                          title="Remove image"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  ref={instructionsFileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleInstructionFiles}
+                />
+                <button
+                  type="button"
+                  onClick={() => instructionsFileRef.current?.click()}
+                  className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                  Add photos
+                </button>
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -394,6 +508,38 @@ export function RecurringTaskDetail({
                     No instructions provided.
                   </p>
                 )}
+                {task.images.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {task.images.map((img) => (
+                      <Dialog key={img.id}>
+                        <DialogTrigger asChild>
+                          <button
+                            type="button"
+                            className="h-24 w-24 overflow-hidden rounded-md border bg-background transition-shadow hover:shadow-md"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={img.imageUrl}
+                              alt={img.originalName}
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl p-0">
+                          <DialogTitle className="sr-only">
+                            {img.originalName}
+                          </DialogTitle>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={img.imageUrl}
+                            alt={img.originalName}
+                            className="h-auto w-full rounded-lg"
+                          />
+                        </DialogContent>
+                      </Dialog>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="text-xs text-muted-foreground">
                 Created by {task.creatorName ?? "Unknown"} ·{" "}
@@ -428,6 +574,7 @@ export function RecurringTaskDetail({
           activity={activity}
           onAddComment={addRecurringTaskComment}
           onDeleteComment={deleteRecurringTaskComment}
+          onUploadImages={uploadRecurringImages}
         />
       )}
     </div>

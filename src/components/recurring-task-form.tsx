@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Loader2, Repeat } from "lucide-react";
+import { ImagePlus, Loader2, Repeat, X } from "lucide-react";
 import { createRecurringTask } from "@/lib/recurring-actions";
+import { uploadRecurringImages } from "@/lib/upload-images";
 import {
   FREQUENCIES,
   FREQUENCY_LABELS,
@@ -51,8 +52,30 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
   const [frequency, setFrequency] = useState<RecurrenceFrequency>("weekly");
   const [dueWeekday, setDueWeekday] = useState("1"); // Monday
   const [dueDayOfMonth, setDueDayOfMonth] = useState("30");
+  const [pendingImages, setPendingImages] = useState<
+    { file: File; preview: string }[]
+  >([]);
+  const instructionsFileRef = useRef<HTMLInputElement>(null);
 
   const members = departmentId !== "none" ? (membersMap[departmentId] ?? []) : [];
+
+  function handleInstructionFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const picked = Array.from(files)
+      .filter((f) => f.type.startsWith("image/"))
+      .map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setPendingImages((prev) => [...prev, ...picked]);
+    if (instructionsFileRef.current) instructionsFileRef.current.value = "";
+  }
+
+  function removePendingImage(index: number) {
+    setPendingImages((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -72,6 +95,10 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
 
     setLoading(true);
     try {
+      const imageKeys =
+        pendingImages.length > 0
+          ? await uploadRecurringImages(pendingImages.map((i) => i.file))
+          : undefined;
       await createRecurringTask({
         title: title.trim(),
         description: description.trim() || undefined,
@@ -81,6 +108,7 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
         frequency,
         dueWeekday: frequency === "weekly" ? Number(dueWeekday) : null,
         dueDayOfMonth: frequency === "monthly" ? Number(dueDayOfMonth) : null,
+        imageKeys,
       });
       router.push("/recurring");
       router.refresh();
@@ -135,6 +163,49 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
             <p className="text-xs text-muted-foreground">
               Optional. Steps or guidelines to complete this task.
             </p>
+
+            {pendingImages.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {pendingImages.map((img, i) => (
+                  <div
+                    key={img.preview}
+                    className="group relative h-20 w-20 overflow-hidden rounded-md border bg-muted"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={img.preview}
+                      alt={img.file.name}
+                      className="h-full w-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePendingImage(i)}
+                      className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                      title="Remove image"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <input
+              ref={instructionsFileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleInstructionFiles}
+            />
+            <button
+              type="button"
+              onClick={() => instructionsFileRef.current?.click()}
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ImagePlus className="h-4 w-4" />
+              Add photos
+            </button>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

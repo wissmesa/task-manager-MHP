@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addTaskComment, deleteTaskComment } from "@/lib/actions";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Trash2, MessageSquare, History, ArrowRight } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Loader2,
+  Trash2,
+  MessageSquare,
+  History,
+  ArrowRight,
+  ImagePlus,
+  X,
+} from "lucide-react";
+
+export interface CommentImage {
+  id: string;
+  imageUrl: string;
+  originalName: string;
+}
 
 export interface CommentItem {
   id: string;
@@ -17,6 +37,7 @@ export interface CommentItem {
   updatedAt: Date | string;
   userId: string;
   author: { id: string; fullName: string; email: string } | null;
+  images?: CommentImage[];
 }
 
 export interface ActivityItem {
@@ -36,8 +57,19 @@ interface TaskDiscussionProps {
   comments: CommentItem[];
   activity: ActivityItem[];
   /** Optional custom server actions (defaults to regular task actions). */
-  onAddComment?: (taskId: string, content: string) => Promise<void>;
+  onAddComment?: (
+    taskId: string,
+    content: string,
+    imageKeys?: { s3Key: string; originalName: string }[]
+  ) => Promise<void>;
   onDeleteComment?: (commentId: string) => Promise<void>;
+  /**
+   * When provided, comments support photo attachments. Receives the picked
+   * files, uploads them, and returns their stored S3 keys.
+   */
+  onUploadImages?: (
+    files: File[]
+  ) => Promise<{ s3Key: string; originalName: string }[]>;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -95,6 +127,11 @@ function relativeTime(value: Date | string) {
   return formatDateTime(value);
 }
 
+interface LocalCommentImage {
+  file: File;
+  preview: string;
+}
+
 export function TaskDiscussion({
   taskId,
   currentUserId,
@@ -103,22 +140,58 @@ export function TaskDiscussion({
   activity,
   onAddComment,
   onDeleteComment,
+  onUploadImages,
 }: TaskDiscussionProps) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
   const [submitting, startSubmit] = useTransition();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<LocalCommentImage[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addComment = onAddComment ?? addTaskComment;
   const removeComment = onDeleteComment ?? deleteTaskComment;
+  const canAttach = !!onUploadImages;
+
+  async function addComment(
+    id: string,
+    content: string,
+    imageKeys?: { s3Key: string; originalName: string }[]
+  ) {
+    if (onAddComment) return onAddComment(id, content, imageKeys);
+    return addTaskComment(id, content);
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const picked = Array.from(files)
+      .filter((f) => f.type.startsWith("image/"))
+      .map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setPendingImages((prev) => [...prev, ...picked]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removePendingImage(index: number) {
+    setPendingImages((prev) => {
+      const target = prev[index];
+      if (target) URL.revokeObjectURL(target.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
 
   function handleSubmit() {
     const content = draft.trim();
-    if (!content) return;
+    if (!content && pendingImages.length === 0) return;
     startSubmit(async () => {
       try {
-        await addComment(taskId, content);
+        let imageKeys: { s3Key: string; originalName: string }[] | undefined;
+        if (pendingImages.length > 0 && onUploadImages) {
+          imageKeys = await onUploadImages(pendingImages.map((i) => i.file));
+        }
+        await addComment(taskId, content, imageKeys);
         setDraft("");
+        pendingImages.forEach((i) => URL.revokeObjectURL(i.preview));
+        setPendingImages([]);
         router.refresh();
       } catch (err) {
         alert(err instanceof Error ? err.message : "Failed to add comment");
@@ -171,11 +244,65 @@ export function TaskDiscussion({
                   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") handleSubmit();
                 }}
               />
+
+              {canAttach && pendingImages.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {pendingImages.map((img, i) => (
+                    <div
+                      key={img.preview}
+                      className="group relative h-16 w-16 overflow-hidden rounded-md border bg-muted"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.preview}
+                        alt={img.file.name}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePendingImage(i)}
+                        className="absolute right-0.5 top-0.5 rounded-full bg-background/80 p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100"
+                        title="Remove image"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">
-                  Press ⌘/Ctrl + Enter to send
-                </span>
-                <Button size="sm" onClick={handleSubmit} disabled={submitting || !draft.trim()}>
+                <div className="flex items-center gap-3">
+                  {canAttach && (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        title="Attach photos"
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        Add photos
+                      </button>
+                    </>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    Press ⌘/Ctrl + Enter to send
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={submitting || (!draft.trim() && pendingImages.length === 0)}
+                >
                   {submitting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
                   Comment
                 </Button>
@@ -221,9 +348,43 @@ export function TaskDiscussion({
                             </button>
                           )}
                         </div>
-                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground/90">
-                          {c.content}
-                        </p>
+                        {c.content && (
+                          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-foreground/90">
+                            {c.content}
+                          </p>
+                        )}
+                        {c.images && c.images.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {c.images.map((img) => (
+                              <Dialog key={img.id}>
+                                <DialogTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="h-20 w-20 overflow-hidden rounded-md border bg-muted transition-shadow hover:shadow-md"
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={img.imageUrl}
+                                      alt={img.originalName}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl p-0">
+                                  <DialogTitle className="sr-only">
+                                    {img.originalName}
+                                  </DialogTitle>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={img.imageUrl}
+                                    alt={img.originalName}
+                                    className="h-auto w-full rounded-lg"
+                                  />
+                                </DialogContent>
+                              </Dialog>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </li>
                   );

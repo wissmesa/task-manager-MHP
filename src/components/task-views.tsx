@@ -31,6 +31,7 @@ import {
   VALUE_SHORT_LABELS,
   CATEGORY_COLOR,
   CATEGORY_LABELS,
+  getDepartmentColor,
   type TaskCategory,
 } from "@/lib/task-attributes";
 import { ChevronDown, ChevronRight, ChevronsRight, ImageIcon, Loader2, Trash2 } from "lucide-react";
@@ -281,6 +282,15 @@ function KanbanCard({
           <TooltipContent>{PRIORITY_LABELS[task.priority]}</TooltipContent>
         </Tooltip>
 
+        {task.department?.name && (
+          <Badge
+            variant="secondary"
+            className={`text-[10px] ${getDepartmentColor(task.department.name)}`}
+          >
+            {task.department.name}
+          </Badge>
+        )}
+
         {task.planningStage && (
           <Badge
             variant="secondary"
@@ -335,8 +345,7 @@ function KanbanCard({
         )}
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="truncate">{task.department?.name ?? "—"}</span>
+      <div className="mt-2 flex items-center justify-end gap-2 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           {task.dueDate && (
             <span className="whitespace-nowrap">
@@ -449,7 +458,7 @@ export function KanbanBoard({
   }
 
   return (
-    <div className="flex items-stretch gap-4 overflow-x-auto pb-2">
+    <div className="flex h-[calc(100vh-15rem)] items-stretch gap-4 overflow-x-auto pb-2">
       {STATUS_ORDER.map((status) => {
         const groupTasks = groups[status];
         const isCollapsed = collapsed[status];
@@ -508,7 +517,7 @@ export function KanbanBoard({
               isDropTarget ? "ring-2 ring-primary ring-offset-1" : ""
             }`}
           >
-            <div className="flex items-center gap-2 px-3 py-2.5">
+            <div className="flex shrink-0 items-center gap-2 px-3 py-2.5">
               <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
               <span className="text-sm font-medium">{STATUS_LABELS[status]}</span>
               <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">
@@ -525,7 +534,7 @@ export function KanbanBoard({
                 <ChevronsRight className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex-1 space-y-2 px-2 pb-3">
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-3">
               {groupTasks.length === 0 ? (
                 <p
                   className={`rounded-md border border-dashed px-1 py-6 text-center text-xs text-muted-foreground ${

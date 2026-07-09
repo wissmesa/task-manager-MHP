@@ -6,6 +6,8 @@ import {
   recurringTaskCompletions,
   recurringTaskActivity,
   recurringTaskComments,
+  recurringTaskImages,
+  recurringCommentImages,
   departments,
   userDepartment,
   users,
@@ -19,6 +21,32 @@ import {
   type RecurrenceFrequency,
 } from "@/lib/recurrence";
 import { sendRecurringTaskAssignedEmail } from "@/lib/mail";
+import { getSignedImageUrl } from "@/lib/s3";
+
+/** An image attachment as stored (S3 key). */
+export interface ImageKeyInput {
+  s3Key: string;
+  originalName: string;
+}
+
+/** An image attachment resolved for display (signed URL). */
+export interface ResolvedImage {
+  id: string;
+  imageUrl: string;
+  originalName: string;
+}
+
+async function resolveImageUrls(
+  images: { id: string; imageUrl: string; originalName: string }[]
+): Promise<ResolvedImage[]> {
+  return Promise.all(
+    images.map(async (img) => ({
+      id: img.id,
+      imageUrl: await getSignedImageUrl(img.imageUrl),
+      originalName: img.originalName,
+    }))
+  );
+}
 
 function recurringTaskUrl(id: string): string {
   const baseUrl =
@@ -88,6 +116,7 @@ export interface RecurringTaskDTO {
   createdAt: string;
   completedKeys: string[];
   completions: CompletionInfo[];
+  images: ResolvedImage[];
   canToggle: boolean;
   canManage: boolean;
 }
@@ -307,6 +336,8 @@ export async function getRecurringTasksForUser(): Promise<RecurringTaskDTO[]> {
       completedAt: c.completedAt.toISOString(),
       completedByName: c.completedByUser?.fullName ?? null,
     })),
+    // Instruction images are only needed on the detail view, skip signing here.
+    images: [],
     canToggle: canToggleTask(r),
     canManage: canManageTask(r),
   }));
@@ -328,6 +359,9 @@ export async function getRecurringTaskById(
         columns: { periodKey: true, completedAt: true },
         with: { completedByUser: { columns: { fullName: true } } },
       },
+      images: {
+        columns: { id: true, imageUrl: true, originalName: true },
+      },
     },
   });
   if (!r) return null;
@@ -335,6 +369,8 @@ export async function getRecurringTaskById(
   const canToggleFlag = await canToggle(session.user, r);
   if (!canToggleFlag) return null; // no view access
   const canManageFlag = await canManage(session.user, r);
+
+  const resolvedImages = await resolveImageUrls(r.images);
 
   return {
     id: r.id,
@@ -358,6 +394,7 @@ export async function getRecurringTaskById(
       completedAt: c.completedAt.toISOString(),
       completedByName: c.completedByUser?.fullName ?? null,
     })),
+    images: resolvedImages,
     canToggle: canToggleFlag,
     canManage: canManageFlag,
   };
@@ -374,6 +411,8 @@ export async function updateRecurringTask(
     dueWeekday?: number | null;
     dueDayOfMonth?: number | null;
     assignedTo?: string | null;
+    imageKeys?: ImageKeyInput[];
+    removedImageIds?: string[];
   }
 ): Promise<void> {
   const session = await auth();
@@ -435,6 +474,29 @@ export async function updateRecurringTask(
     await db
       .delete(recurringTaskCompletions)
       .where(eq(recurringTaskCompletions.recurringTaskId, id));
+  }
+
+  // Remove instruction images the user deleted.
+  if (input.removedImageIds && input.removedImageIds.length > 0) {
+    await db
+      .delete(recurringTaskImages)
+      .where(
+        and(
+          eq(recurringTaskImages.recurringTaskId, id),
+          inArray(recurringTaskImages.id, input.removedImageIds)
+        )
+      );
+  }
+
+  // Add newly attached instruction images.
+  if (input.imageKeys && input.imageKeys.length > 0) {
+    await db.insert(recurringTaskImages).values(
+      input.imageKeys.map((img) => ({
+        recurringTaskId: id,
+        imageUrl: img.s3Key,
+        originalName: img.originalName,
+      }))
+    );
   }
 
   // Record the change history.
@@ -522,6 +584,7 @@ export async function createRecurringTask(input: {
   dueWeekday?: number | null;
   dueDayOfMonth?: number | null;
   assignedTo?: string | null;
+  imageKeys?: ImageKeyInput[];
 }): Promise<string> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
@@ -560,6 +623,16 @@ export async function createRecurringTask(input: {
       dueDayOfMonth,
     })
     .returning();
+
+  if (input.imageKeys && input.imageKeys.length > 0) {
+    await db.insert(recurringTaskImages).values(
+      input.imageKeys.map((img) => ({
+        recurringTaskId: row.id,
+        imageUrl: img.s3Key,
+        originalName: img.originalName,
+      }))
+    );
+  }
 
   await recordRecurringActivity({
     recurringTaskId: row.id,
@@ -655,6 +728,7 @@ export interface RecurringCommentItem {
   updatedAt: string;
   userId: string;
   author: { id: string; fullName: string; email: string } | null;
+  images: ResolvedImage[];
 }
 
 export interface RecurringActivityItem {
@@ -675,31 +749,39 @@ export async function getRecurringTaskComments(
 
   const rows = await db.query.recurringTaskComments.findMany({
     where: eq(recurringTaskComments.recurringTaskId, recurringTaskId),
-    with: { user: { columns: { id: true, fullName: true, email: true } } },
+    with: {
+      user: { columns: { id: true, fullName: true, email: true } },
+      images: { columns: { id: true, imageUrl: true, originalName: true } },
+    },
     orderBy: [asc(recurringTaskComments.createdAt)],
   });
 
-  return rows.map((c) => ({
-    id: c.id,
-    content: c.content,
-    createdAt: c.createdAt.toISOString(),
-    updatedAt: c.updatedAt.toISOString(),
-    userId: c.userId,
-    author: c.user
-      ? { id: c.user.id, fullName: c.user.fullName, email: c.user.email }
-      : null,
-  }));
+  return Promise.all(
+    rows.map(async (c) => ({
+      id: c.id,
+      content: c.content,
+      createdAt: c.createdAt.toISOString(),
+      updatedAt: c.updatedAt.toISOString(),
+      userId: c.userId,
+      author: c.user
+        ? { id: c.user.id, fullName: c.user.fullName, email: c.user.email }
+        : null,
+      images: await resolveImageUrls(c.images),
+    }))
+  );
 }
 
 export async function addRecurringTaskComment(
   recurringTaskId: string,
-  content: string
+  content: string,
+  imageKeys?: ImageKeyInput[]
 ): Promise<void> {
   const session = await auth();
   if (!session?.user) throw new Error("Unauthorized");
 
   const trimmed = content.trim();
-  if (!trimmed) throw new Error("Comment cannot be empty");
+  const hasImages = !!imageKeys && imageKeys.length > 0;
+  if (!trimmed && !hasImages) throw new Error("Comment cannot be empty");
   if (trimmed.length > 5000) throw new Error("Comment is too long");
 
   const task = await db.query.recurringTasks.findFirst({
@@ -712,11 +794,24 @@ export async function addRecurringTaskComment(
   const allowed = await canToggle(session.user, task);
   if (!allowed) throw new Error("You don't have access to this task");
 
-  await db.insert(recurringTaskComments).values({
-    recurringTaskId,
-    userId: session.user.id,
-    content: trimmed,
-  });
+  const [comment] = await db
+    .insert(recurringTaskComments)
+    .values({
+      recurringTaskId,
+      userId: session.user.id,
+      content: trimmed,
+    })
+    .returning();
+
+  if (hasImages) {
+    await db.insert(recurringCommentImages).values(
+      imageKeys!.map((img) => ({
+        commentId: comment.id,
+        imageUrl: img.s3Key,
+        originalName: img.originalName,
+      }))
+    );
+  }
 
   revalidatePath(`/recurring/${recurringTaskId}`);
 }
