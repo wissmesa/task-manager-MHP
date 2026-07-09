@@ -747,10 +747,9 @@ function CalendarDay({
     : true;
   const clickable = canToggle && occ.status !== "upcoming";
 
+  const lateDone = done && !onTime;
   const cls = done
-    ? onTime
-      ? "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-      : "border-amber-500 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+    ? "border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
     : occ.status === "overdue"
       ? "border-red-500/60 bg-red-500/10 text-red-600 dark:text-red-400"
       : occ.status === "pending"
@@ -764,7 +763,7 @@ function CalendarDay({
       disabled={!clickable || busy}
       aria-label={done ? "Mark not done" : "Mark done"}
       className={cn(
-        "group/day flex h-6 w-full items-center justify-center gap-0.5 rounded border text-xs transition-all duration-150",
+        "group/day relative flex h-6 w-full items-center justify-center gap-0.5 rounded border text-xs transition-all duration-150",
         cls,
         clickable && "cursor-pointer hover:shadow-sm active:scale-95",
         !clickable && "cursor-default",
@@ -772,6 +771,9 @@ function CalendarDay({
         occ.isCurrent && "ring-2 ring-primary/40"
       )}
     >
+      {lateDone && (
+        <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500 ring-1 ring-background" />
+      )}
       <span className="text-[9px] font-semibold leading-none">{day}</span>
       {done ? (
         <Check

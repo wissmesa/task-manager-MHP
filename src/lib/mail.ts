@@ -12,7 +12,11 @@ function init() {
 
 const FROM_ADDRESS = () => process.env.SENDGRID_FROM || "noreply@mhpsalesmanager.com";
 
-type EmailReason = "assigned" | "approval_needed" | "dept_approval_needed";
+type EmailReason =
+  | "assigned"
+  | "approval_needed"
+  | "dept_approval_needed"
+  | "executive_notice";
 type StatusChangeType = "in_progress" | "completed" | "cancelled";
 
 interface TaskNotificationData {
@@ -45,6 +49,7 @@ export async function sendTaskCreatedEmail(
     assigned: `${emoji} Task Assigned: ${data.taskTitle}`,
     approval_needed: `${emoji} Approval Needed: ${data.taskTitle}`,
     dept_approval_needed: `${emoji} Dept. Approval Needed: ${data.taskTitle}`,
+    executive_notice: `${emoji} New Executive Task: ${data.taskTitle}`,
   };
   const subject = subjectByReason[data.reason];
 
@@ -52,12 +57,14 @@ export async function sendTaskCreatedEmail(
     assigned: `Hi <strong>${recipientName}</strong>, a new task has been assigned to you by <strong>${data.creatorName}</strong>.`,
     approval_needed: `Hi <strong>${recipientName}</strong>, a new task created by <strong>${data.creatorName}</strong> requires your approval.`,
     dept_approval_needed: `Hi <strong>${recipientName}</strong>, a task created by <strong>${data.creatorName}</strong> has been approved by the coordinator and now requires your department approval.`,
+    executive_notice: `Hi <strong>${recipientName}</strong>, a new task for the <strong>Executive</strong> department was created by <strong>${data.creatorName}</strong>.`,
   };
 
   const headingByReason: Record<EmailReason, string> = {
     assigned: "Task Assigned to You",
     approval_needed: "New Task — Approval Required",
     dept_approval_needed: "New Task — Department Approval Required",
+    executive_notice: "New Executive Department Task",
   };
 
   const html = `

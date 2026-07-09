@@ -219,6 +219,15 @@ export async function POST(req: NextRequest) {
     taskUrl,
   };
 
+  // Notify the Executive inbox whenever a task targets the Executive department
+  // (covers external → Executive and internal Executive → Executive tasks).
+  if (departmentExists.name?.toLowerCase() === "executive") {
+    sendTaskCreatedEmail("chris@mhpsalesmanager.com", "Chris", {
+      ...baseNotification,
+      reason: "executive_notice",
+    });
+  }
+
   if (!isSelfAssigned) {
     if (approvalStatus === "pending_approval" && creatorDeptInfo?.department?.bossId) {
       const boss = await db.query.users.findFirst({

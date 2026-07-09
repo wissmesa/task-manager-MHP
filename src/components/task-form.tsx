@@ -68,8 +68,10 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDept = departments.find((d) => d.id === departmentId);
-  const isBossOfSelected = selectedDept?.bossId === currentUserId;
-  const subordinates = isBossOfSelected ? (subordinatesMap[departmentId] ?? []) : [];
+  // Members of the selected department the current user is allowed to assign to
+  // (Executive/admin get every department; bosses get their own).
+  const assignableMembers =
+    departmentId !== "none" ? (subordinatesMap[departmentId] ?? []) : [];
   const isDevelopmentDept = selectedDept?.name === "Development";
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -318,7 +320,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
               <SelectContent>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 <SelectItem value={currentUserId}>Myself</SelectItem>
-                {subordinates
+                {assignableMembers
                   .filter((u) => u.id !== currentUserId)
                   .map((u) => (
                     <SelectItem key={u.id} value={u.id}>
@@ -327,6 +329,12 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
                   ))}
               </SelectContent>
             </Select>
+            {departmentId !== "none" && assignableMembers.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                You can assign this task to yourself, or leave it unassigned for
+                the department to pick up.
+              </p>
+            )}
           </div>
 
           <div className="space-y-3">
