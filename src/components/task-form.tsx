@@ -27,7 +27,7 @@ import {
   PRIORITY_DESCRIPTIONS,
   type TaskPriority,
 } from "@/lib/task-priority";
-import { EFFORT_OPTIONS, VALUE_OPTIONS, CATEGORY_OPTIONS } from "@/lib/task-attributes";
+import { EFFORT_OPTIONS, VALUE_OPTIONS, CATEGORY_OPTIONS, CLIENT_SCOPE_OPTIONS } from "@/lib/task-attributes";
 
 interface Department {
   id: string;
@@ -65,6 +65,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
   const [effort, setEffort] = useState("none");
   const [value, setValue] = useState("none");
   const [category, setCategory] = useState("none");
+  const [clientScope, setClientScope] = useState("none");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDept = departments.find((d) => d.id === departmentId);
@@ -128,6 +129,9 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       }
       if (category !== "none") {
         formData.set("category", category);
+      }
+      if (clientScope !== "none") {
+        formData.set("clientScope", clientScope);
       }
 
       images.forEach((img) => formData.append("files", img.file));
@@ -291,6 +295,26 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Client / MHP</Label>
+            <Select value={clientScope} onValueChange={setClientScope}>
+              <SelectTrigger className="w-full sm:w-[320px]">
+                <SelectValue placeholder="Select..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Not specified</SelectItem>
+                {CLIENT_SCOPE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Whether this task is for the Client, MHP, or Both.
+            </p>
           </div>
 
           <div className="space-y-2">

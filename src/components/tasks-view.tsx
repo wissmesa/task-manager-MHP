@@ -59,6 +59,7 @@ type TaskRow = {
     | "personal_inner_game"
     | "family_life_ops"
     | null;
+  clientScope: "client" | "mhp" | "both" | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory, addTaskComment } from "@/lib/actions";
+import { updateTask, approveTask, rejectTask, assignTaskToUser, deleteTask, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory, updateTaskClientScope, addTaskComment } from "@/lib/actions";
 import {
   EFFORT_OPTIONS,
   EFFORT_COLORS,
@@ -14,9 +14,13 @@ import {
   CATEGORY_OPTIONS,
   CATEGORY_COLOR,
   CATEGORY_LABELS,
+  CLIENT_SCOPE_OPTIONS,
+  CLIENT_SCOPE_COLORS,
+  CLIENT_SCOPE_LABELS,
   type TaskEffort,
   type TaskValue,
   type TaskCategory,
+  type TaskClientScope,
 } from "@/lib/task-attributes";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -125,6 +129,7 @@ interface TaskData {
   effort: TaskEffort | null;
   value: TaskValue | null;
   category: TaskCategory | null;
+  clientScope: TaskClientScope | null;
   images: TaskImage[];
 }
 
@@ -219,6 +224,7 @@ export function TaskDetail({
   const [editEffort, setEditEffort] = useState<string>(task.effort ?? "none");
   const [editValue, setEditValue] = useState<string>(task.value ?? "none");
   const [editCategory, setEditCategory] = useState<string>(task.category ?? "none");
+  const [editClientScope, setEditClientScope] = useState<string>(task.clientScope ?? "none");
   const [selectedSubordinate, setSelectedSubordinate] = useState(task.assignedTo || "unassigned");
 
   const editDeptName =
@@ -274,6 +280,7 @@ export function TaskDetail({
     setEditEffort(task.effort ?? "none");
     setEditValue(task.value ?? "none");
     setEditCategory(task.category ?? "none");
+    setEditClientScope(task.clientScope ?? "none");
     setEditing(false);
   }
 
@@ -313,6 +320,10 @@ export function TaskDetail({
       const nextCategory = editCategory === "none" ? null : (editCategory as TaskCategory);
       if (nextCategory !== (task.category ?? null)) {
         await updateTaskCategory(task.id, nextCategory);
+      }
+      const nextClientScope = editClientScope === "none" ? null : (editClientScope as TaskClientScope);
+      if (nextClientScope !== (task.clientScope ?? null)) {
+        await updateTaskClientScope(task.id, nextClientScope);
       }
 
       setEditing(false);
@@ -659,6 +670,11 @@ export function TaskDetail({
                     {CATEGORY_LABELS[task.category]}
                   </Badge>
                 )}
+                {task.clientScope && (
+                  <Badge variant="secondary" className={CLIENT_SCOPE_COLORS[task.clientScope]}>
+                    {CLIENT_SCOPE_LABELS[task.clientScope]}
+                  </Badge>
+                )}
               </div>
               )}
             </div>
@@ -879,7 +895,7 @@ export function TaskDetail({
                   </Select>
                 </div>
 
-                <div className="space-y-1.5 sm:col-span-2">
+                <div className="space-y-1.5">
                   <Label>Category</Label>
                   <Select value={editCategory} onValueChange={setEditCategory}>
                     <SelectTrigger className="w-full">
@@ -888,6 +904,23 @@ export function TaskDetail({
                     <SelectContent>
                       <SelectItem value="none">Not specified</SelectItem>
                       {CATEGORY_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Client / MHP</Label>
+                  <Select value={editClientScope} onValueChange={setEditClientScope}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      {CLIENT_SCOPE_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>

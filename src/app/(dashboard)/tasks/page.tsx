@@ -61,6 +61,7 @@ export default async function TasksPage() {
           effort: t.effort ?? null,
           value: t.value ?? null,
           category: t.category ?? null,
+          clientScope: t.clientScope ?? null,
           creator: t.creator ? { fullName: t.creator.fullName } : null,
           assignee: t.assignee ? { id: t.assignee.id, fullName: t.assignee.fullName } : null,
           department: t.department ? { name: t.department.name } : null,

@@ -93,6 +93,13 @@ export async function POST(req: NextRequest) {
       ? (categoryRaw as (typeof CATEGORY_VALUES)[number])
       : null;
 
+  const CLIENT_SCOPE_VALUES = ["client", "mhp", "both"] as const;
+  const clientScopeRaw = formData.get("clientScope") as string | null;
+  const clientScope =
+    clientScopeRaw && CLIENT_SCOPE_VALUES.includes(clientScopeRaw as (typeof CLIENT_SCOPE_VALUES)[number])
+      ? (clientScopeRaw as (typeof CLIENT_SCOPE_VALUES)[number])
+      : null;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tenantId: string | null = (session.user as any).tenantId ?? null;
 
@@ -159,6 +166,7 @@ export async function POST(req: NextRequest) {
       effort,
       value,
       category,
+      clientScope,
       approval: approvalStatus,
       ownBossApproved,
       approvedBy,
