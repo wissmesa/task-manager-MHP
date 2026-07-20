@@ -31,8 +31,11 @@ import {
   VALUE_SHORT_LABELS,
   CATEGORY_COLOR,
   CATEGORY_LABELS,
+  CLIENT_SCOPE_COLORS,
+  CLIENT_SCOPE_LABELS,
   getDepartmentColor,
   type TaskCategory,
+  type TaskClientScope,
 } from "@/lib/task-attributes";
 import { ChevronDown, ChevronRight, ChevronsRight, ImageIcon, Loader2, Trash2 } from "lucide-react";
 
@@ -58,6 +61,7 @@ export type TaskViewRow = {
   effort: "low" | "mid_low" | "mid_high" | "high" | null;
   value: "anyone" | "specialist" | "senior" | "highest" | null;
   category: TaskCategory | null;
+  clientScope: TaskClientScope | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -337,6 +341,14 @@ function KanbanCard({
             className={`whitespace-normal text-[10px] ${CATEGORY_COLOR}`}
           >
             {CATEGORY_LABELS[task.category]}
+          </Badge>
+        )}
+        {task.clientScope && (
+          <Badge
+            variant="secondary"
+            className={`text-[10px] ${CLIENT_SCOPE_COLORS[task.clientScope]}`}
+          >
+            {CLIENT_SCOPE_LABELS[task.clientScope]}
           </Badge>
         )}
 

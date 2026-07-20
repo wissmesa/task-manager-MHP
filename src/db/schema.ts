@@ -116,6 +116,7 @@ export const tasks = pgTable("tm_tasks", {
     | "personal_inner_game"
     | "family_life_ops"
   >(),
+  clientScope: varchar("client_scope").$type<"client" | "mhp" | "both">(),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

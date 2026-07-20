@@ -3,11 +3,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory, deleteTask } from "@/lib/actions";
+import { updateTaskStatus, updateTaskAssignee, updateTaskPriority, updateTaskPlanningStage, updateTaskDueDate, updateTaskWaitingForBundle, updateTaskDevTarget, updateTaskEffort, updateTaskValue, updateTaskCategory, updateTaskClientScope, deleteTask } from "@/lib/actions";
 import {
   TASK_EFFORTS,
   TASK_VALUES,
   TASK_CATEGORIES,
+  TASK_CLIENT_SCOPES,
   EFFORT_LABELS,
   EFFORT_COLORS,
   EFFORT_ORDER,
@@ -18,9 +19,13 @@ import {
   CATEGORY_LABELS,
   CATEGORY_COLOR,
   CATEGORY_ORDER,
+  CLIENT_SCOPE_LABELS,
+  CLIENT_SCOPE_COLORS,
+  CLIENT_SCOPE_ORDER,
   type TaskEffort,
   type TaskValue,
   type TaskCategory,
+  type TaskClientScope,
 } from "@/lib/task-attributes";
 import {
   TASK_PRIORITIES,
@@ -88,6 +93,7 @@ type TaskRow = {
   effort: TaskEffort | null;
   value: TaskValue | null;
   category: TaskCategory | null;
+  clientScope: TaskClientScope | null;
   creator: { fullName: string } | null;
   assignee: { id: string; fullName: string } | null;
   department: { name: string } | null;
@@ -228,6 +234,7 @@ type SortKey =
   | "effort"
   | "value"
   | "category"
+  | "clientScope"
   | "priority"
   | "coord"
   | "dept"
@@ -280,6 +287,8 @@ function getSortValue(task: TaskRow, key: SortKey): string | number | null {
       return task.value ? VALUE_ORDER[task.value] : null;
     case "category":
       return task.category ? CATEGORY_ORDER[task.category] : null;
+    case "clientScope":
+      return task.clientScope ? CLIENT_SCOPE_ORDER[task.clientScope] : null;
     case "priority":
       return PRIORITY_ORDER[task.priority] ?? null;
     case "coord":
@@ -508,6 +517,21 @@ export function TaskTable({
     });
   }
 
+  function handleClientScopeChange(taskId: string, value: string) {
+    const clientScope = value === "none" ? null : (value as TaskClientScope);
+    setSavingCell(`clientScope-${taskId}`);
+    startTransition(async () => {
+      try {
+        await updateTaskClientScope(taskId, clientScope);
+        router.refresh();
+      } catch (err) {
+        console.error("Failed to update client scope:", err);
+      } finally {
+        setSavingCell(null);
+      }
+    });
+  }
+
   function handleAssigneeChange(taskId: string, newAssignee: string) {
     const assignedTo = newAssignee === "unassigned" ? null : newAssignee;
     setSavingCell(`assignee-${taskId}`);
@@ -612,7 +636,8 @@ export function TaskTable({
               <SortableHead label="Pri." sortKey="priority" className="w-[5%]" />
               <SortableHead label="Effort" sortKey="effort" className="w-[7%]" />
               <SortableHead label="Value" sortKey="value" className="w-[6%]" />
-              <SortableHead label="Category" sortKey="category" className="w-[10%]" />
+              <SortableHead label="Category" sortKey="category" className="w-[9%]" />
+              <SortableHead label="Client/MHP" sortKey="clientScope" className="w-[6%]" />
               <SortableHead label="Department" sortKey="department" className="w-[7%]" />
               <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
               <SortableHead label="Due" sortKey="due" className="w-[7%]" />
@@ -624,7 +649,7 @@ export function TaskTable({
           <TableBody>
             {paginatedTasks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={(showStageColumn ? 13 : 12) + (canEditDevFields ? 2 : 0) - (hideStatusColumn ? 1 : 0)} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={(showStageColumn ? 14 : 13) + (canEditDevFields ? 2 : 0) - (hideStatusColumn ? 1 : 0)} className="h-24 text-center text-muted-foreground">
                   No tasks found
                 </TableCell>
               </TableRow>
@@ -1142,6 +1167,63 @@ export function TaskTable({
                           className={`max-w-full whitespace-normal text-left leading-tight text-xs ${CATEGORY_COLOR}`}
                         >
                           {CATEGORY_LABELS[task.category]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="px-1.5" onClick={(e) => canEditStatus && e.stopPropagation()}>
+                      {canEditStatus ? (
+                        <div className="flex items-center gap-1">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="cursor-pointer">
+                                {task.clientScope ? (
+                                  <Badge
+                                    variant="secondary"
+                                    className={`text-xs ${CLIENT_SCOPE_COLORS[task.clientScope]} hover:opacity-80 transition-opacity`}
+                                  >
+                                    {CLIENT_SCOPE_LABELS[task.clientScope]}
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs bg-muted text-muted-foreground hover:opacity-80 transition-opacity"
+                                  >
+                                    Set
+                                  </Badge>
+                                )}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => handleClientScopeChange(task.id, "none")}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="text-muted-foreground">None</span>
+                                {!task.clientScope && <Check className="h-4 w-4" />}
+                              </DropdownMenuItem>
+                              {TASK_CLIENT_SCOPES.map((scope) => (
+                                <DropdownMenuItem
+                                  key={scope}
+                                  onClick={() => handleClientScopeChange(task.id, scope)}
+                                  className="flex items-center justify-between gap-4"
+                                >
+                                  <Badge variant="secondary" className={CLIENT_SCOPE_COLORS[scope]}>
+                                    {CLIENT_SCOPE_LABELS[scope]}
+                                  </Badge>
+                                  {task.clientScope === scope && <Check className="h-4 w-4" />}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {savingCell === `clientScope-${task.id}` && (
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                      ) : task.clientScope ? (
+                        <Badge variant="secondary" className={`text-xs ${CLIENT_SCOPE_COLORS[task.clientScope]}`}>
+                          {CLIENT_SCOPE_LABELS[task.clientScope]}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">—</span>

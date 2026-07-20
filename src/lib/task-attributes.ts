@@ -123,6 +123,35 @@ export const CATEGORY_OPTIONS = TASK_CATEGORIES.map((value) => ({
   label: CATEGORY_LABELS[value],
 }));
 
+// Client / MHP / Both — indicates whether a task benefits the client, the
+// internal MHP org, or both.
+export type TaskClientScope = "client" | "mhp" | "both";
+
+export const TASK_CLIENT_SCOPES: TaskClientScope[] = ["client", "mhp", "both"];
+
+export const CLIENT_SCOPE_LABELS: Record<TaskClientScope, string> = {
+  client: "Client",
+  mhp: "MHP",
+  both: "Both",
+};
+
+export const CLIENT_SCOPE_COLORS: Record<TaskClientScope, string> = {
+  client: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+  mhp: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
+  both: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400",
+};
+
+export const CLIENT_SCOPE_ORDER: Record<TaskClientScope, number> = {
+  client: 0,
+  mhp: 1,
+  both: 2,
+};
+
+export const CLIENT_SCOPE_OPTIONS = TASK_CLIENT_SCOPES.map((value) => ({
+  value,
+  label: CLIENT_SCOPE_LABELS[value],
+}));
+
 // ── Department colors ─────────────────────────────────────────────────────────
 
 /** Known departments get a fixed color; unknown ones fall back to a hash. */

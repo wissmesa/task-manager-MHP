@@ -248,6 +248,11 @@ async function migrate() {
     ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS category VARCHAR;
   `;
 
+  console.log("Adding client_scope column to tm_tasks...");
+  await sql`
+    ALTER TABLE tm_tasks ADD COLUMN IF NOT EXISTS client_scope VARCHAR;
+  `;
+
   console.log("Creating tm_task_activity table...");
   await sql`
     CREATE TABLE IF NOT EXISTS tm_task_activity (

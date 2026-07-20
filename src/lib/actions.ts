@@ -17,12 +17,15 @@ import {
   TASK_EFFORTS,
   TASK_VALUES,
   TASK_CATEGORIES,
+  TASK_CLIENT_SCOPES,
   EFFORT_LABELS,
   VALUE_LABELS,
   CATEGORY_LABELS,
+  CLIENT_SCOPE_LABELS,
   type TaskEffort,
   type TaskValue,
   type TaskCategory,
+  type TaskClientScope,
 } from "@/lib/task-attributes";
 
 const ASSIGNABLE_ROLES = ["MHP_LORD", "SALES_DIRECTOR", "DIRECTOR"] as const;
@@ -426,7 +429,7 @@ async function assertCanEditTaskAttributes(taskId: string) {
 
   const task = await db.query.tasks.findFirst({
     where: eq(tasks.id, taskId),
-    columns: { id: true, effort: true, value: true, category: true },
+    columns: { id: true, effort: true, value: true, category: true, clientScope: true },
   });
   if (!task) throw new Error("Task not found");
 
@@ -501,6 +504,34 @@ export async function updateTaskCategory(taskId: string, category: TaskCategory 
       field: "category",
       oldValue: task.category ? CATEGORY_LABELS[task.category] ?? task.category : "Not specified",
       newValue: category ? CATEGORY_LABELS[category] ?? category : "Not specified",
+    });
+  }
+
+  revalidatePath("/tasks");
+  revalidatePath(`/tasks/${taskId}`);
+}
+
+export async function updateTaskClientScope(
+  taskId: string,
+  clientScope: TaskClientScope | null
+) {
+  if (clientScope !== null && !TASK_CLIENT_SCOPES.includes(clientScope)) {
+    throw new Error("Invalid client scope");
+  }
+
+  const { user, task } = await assertCanEditTaskAttributes(taskId);
+
+  await db
+    .update(tasks)
+    .set({ clientScope, updatedAt: new Date() })
+    .where(eq(tasks.id, taskId));
+
+  if (task.clientScope !== clientScope) {
+    await recordActivity(taskId, user.id, {
+      action: "client_scope_changed",
+      field: "clientScope",
+      oldValue: task.clientScope ? CLIENT_SCOPE_LABELS[task.clientScope] ?? task.clientScope : "Not specified",
+      newValue: clientScope ? CLIENT_SCOPE_LABELS[clientScope] ?? clientScope : "Not specified",
     });
   }
 

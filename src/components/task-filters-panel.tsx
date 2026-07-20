@@ -28,6 +28,7 @@ import {
   APPROVAL_OPTIONS,
   BUNDLE_OPTIONS,
   CATEGORY_FILTER_OPTIONS,
+  CLIENT_SCOPE_FILTER_OPTIONS,
   CREATED_OPTIONS,
   DONE_OPTIONS,
   DUE_OPTIONS,
@@ -234,6 +235,8 @@ export function TaskFiltersPanel({
         return VALUE_FILTER_OPTIONS;
       case "category":
         return CATEGORY_FILTER_OPTIONS;
+      case "client_scope":
+        return CLIENT_SCOPE_FILTER_OPTIONS;
       case "department":
         return departments;
       case "assignee":
@@ -501,6 +504,7 @@ export function ActiveFilterBadges({
       ...EFFORT_FILTER_OPTIONS,
       ...VALUE_FILTER_OPTIONS,
       ...CATEGORY_FILTER_OPTIONS,
+      ...CLIENT_SCOPE_FILTER_OPTIONS,
       ...DUE_OPTIONS,
       ...CREATED_OPTIONS,
       ...DONE_OPTIONS,
