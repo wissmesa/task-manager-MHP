@@ -235,7 +235,7 @@ export function OngoingResponsibilityDetail({
             <CardTitle>Edit responsibility</CardTitle>
           ) : (
             <>
-              <CardTitle>{responsibility.title}</CardTitle>
+              <CardTitle className="break-words">{responsibility.title}</CardTitle>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {responsibility.departmentName && (
                   <Badge variant="secondary">{responsibility.departmentName}</Badge>
@@ -454,7 +454,7 @@ export function OngoingResponsibilityDetail({
           ) : (
             <>
               {responsibility.description ? (
-                <p className="whitespace-pre-wrap text-sm">
+                <p className="whitespace-pre-wrap break-words text-sm">
                   {responsibility.description}
                 </p>
               ) : (
@@ -463,7 +463,7 @@ export function OngoingResponsibilityDetail({
               <div className="rounded-lg border bg-muted/30 p-4">
                 <p className="mb-2 text-sm font-semibold">Instructions</p>
                 {responsibility.instructions ? (
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
                     {responsibility.instructions}
                   </p>
                 ) : (

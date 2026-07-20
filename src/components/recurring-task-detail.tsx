@@ -236,7 +236,7 @@ export function RecurringTaskDetail({
             <CardTitle>Edit recurring task</CardTitle>
           ) : (
             <>
-              <CardTitle>{task.title}</CardTitle>
+              <CardTitle className="break-words">{task.title}</CardTitle>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {task.departmentName && (
                   <Badge variant="secondary">{task.departmentName}</Badge>
@@ -493,14 +493,14 @@ export function RecurringTaskDetail({
           ) : (
             <>
               {task.description ? (
-                <p className="whitespace-pre-wrap text-sm">{task.description}</p>
+                <p className="whitespace-pre-wrap break-words text-sm">{task.description}</p>
               ) : (
                 <p className="text-sm text-muted-foreground">No description.</p>
               )}
               <div className="rounded-lg border bg-muted/30 p-4">
                 <p className="mb-2 text-sm font-semibold">Instructions</p>
                 {task.instructions ? (
-                  <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+                  <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
                     {task.instructions}
                   </p>
                 ) : (
