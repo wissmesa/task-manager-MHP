@@ -298,7 +298,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
           </div>
 
           <div className="space-y-2">
-            <Label>Client / MHP</Label>
+            <Label>Affects</Label>
             <Select value={clientScope} onValueChange={setClientScope}>
               <SelectTrigger className="w-full sm:w-[320px]">
                 <SelectValue placeholder="Select..." />
