@@ -171,7 +171,7 @@ export function RecurringTasksView({ tasks, currentUserName }: RecurringTasksVie
 
   const newButton = (
     <Button asChild>
-      <Link href="/recurring/new">
+      <Link href="/responsibilities/recurring/new">
         <Plus className="mr-2 h-4 w-4" />
         New Recurring Task
       </Link>
@@ -192,7 +192,7 @@ export function RecurringTasksView({ tasks, currentUserName }: RecurringTasksVie
               No recurring tasks yet. Create one to start tracking ongoing work.
             </p>
             <Button asChild variant="outline">
-              <Link href="/recurring/new">
+              <Link href="/responsibilities/recurring/new">
                 <Plus className="mr-2 h-4 w-4" />
                 New Recurring Task
               </Link>
@@ -565,11 +565,11 @@ function RecurringTaskCard({
     <Card
       role="button"
       tabIndex={0}
-      onClick={() => router.push(`/recurring/${task.id}`)}
+      onClick={() => router.push(`/responsibilities/recurring/${task.id}`)}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          router.push(`/recurring/${task.id}`);
+          router.push(`/responsibilities/recurring/${task.id}`);
         }
       }}
       className="flex h-full min-w-0 cursor-pointer flex-col overflow-hidden transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none"
@@ -606,7 +606,7 @@ function RecurringTaskCard({
                 className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation();
-                  router.push(`/recurring/${task.id}`);
+                  router.push(`/responsibilities/recurring/${task.id}`);
                 }}
                 aria-label="Edit recurring task"
               >

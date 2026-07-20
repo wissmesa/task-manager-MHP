@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -29,36 +29,32 @@ import {
 } from "@/components/ui/card";
 import {
   ArrowLeft,
+  CircleDot,
   ImagePlus,
   Loader2,
+  Pause,
   Pencil,
-  Repeat,
+  Play,
   Save,
   Trash2,
   User,
   X,
 } from "lucide-react";
-import { RecurringOccurrences } from "@/components/recurring-tasks-view";
 import {
   TaskDiscussion,
   type CommentItem,
   type ActivityItem,
 } from "@/components/task-discussion";
 import {
-  updateRecurringTask,
-  deleteRecurringTask,
-  addRecurringTaskComment,
-  deleteRecurringTaskComment,
-  type RecurringTaskDTO,
-} from "@/lib/recurring-actions";
+  updateOngoingResponsibility,
+  deleteOngoingResponsibility,
+  toggleOngoingActive,
+  addOngoingResponsibilityComment,
+  deleteOngoingResponsibilityComment,
+  type OngoingResponsibilityDTO,
+} from "@/lib/ongoing-actions";
 import { uploadImages } from "@/lib/upload-images";
-import {
-  FREQUENCIES,
-  FREQUENCY_LABELS,
-  WEEKDAY_LABELS,
-  describeRecurrence,
-  type RecurrenceFrequency,
-} from "@/lib/recurrence";
+import { cn } from "@/lib/utils";
 
 interface Department {
   id: string;
@@ -66,41 +62,38 @@ interface Department {
   bossId: string | null;
 }
 
-interface RecurringTaskDetailProps {
-  task: RecurringTaskDTO;
+interface OngoingResponsibilityDetailProps {
+  responsibility: OngoingResponsibilityDTO;
   departments: Department[];
   membersMap: Record<string, { id: string; fullName: string }[]>;
-  currentUserName: string;
   currentUserId: string;
   isAdmin: boolean;
   comments: CommentItem[];
   activity: ActivityItem[];
 }
 
-export function RecurringTaskDetail({
-  task,
+export function OngoingResponsibilityDetail({
+  responsibility,
   departments,
   membersMap,
-  currentUserName,
   currentUserId,
   isAdmin,
   comments,
   activity,
-}: RecurringTaskDetailProps) {
+}: OngoingResponsibilityDetailProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
 
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description ?? "");
-  const [instructions, setInstructions] = useState(task.instructions ?? "");
-  const [departmentId, setDepartmentId] = useState(task.departmentId);
-  const [assignedTo, setAssignedTo] = useState(task.assignedTo ?? "none");
-  const [frequency, setFrequency] = useState<RecurrenceFrequency>(task.frequency);
-  const [dueWeekday, setDueWeekday] = useState(String(task.dueWeekday ?? 1));
-  const [dueDayOfMonth, setDueDayOfMonth] = useState(String(task.dueDayOfMonth ?? 30));
+  const [title, setTitle] = useState(responsibility.title);
+  const [description, setDescription] = useState(responsibility.description ?? "");
+  const [instructions, setInstructions] = useState(responsibility.instructions ?? "");
+  const [departmentId, setDepartmentId] = useState(responsibility.departmentId);
+  const [assignedTo, setAssignedTo] = useState(responsibility.assignedTo ?? "none");
   const [saving, setSaving] = useState(false);
 
-  // Instruction images: existing (removable) + newly picked (uploaded on save).
+  const [isActive, setIsActive] = useState(responsibility.isActive);
+  const [togglingActive, startToggleActive] = useTransition();
+
   const [removedImageIds, setRemovedImageIds] = useState<string[]>([]);
   const [pendingImages, setPendingImages] = useState<
     { file: File; preview: string }[]
@@ -108,19 +101,16 @@ export function RecurringTaskDetail({
   const instructionsFileRef = useRef<HTMLInputElement>(null);
 
   const members = membersMap[departmentId] ?? [];
-  const visibleImages = task.images.filter(
+  const visibleImages = responsibility.images.filter(
     (img) => !removedImageIds.includes(img.id)
   );
 
   function resetForm() {
-    setTitle(task.title);
-    setDescription(task.description ?? "");
-    setInstructions(task.instructions ?? "");
-    setDepartmentId(task.departmentId);
-    setAssignedTo(task.assignedTo ?? "none");
-    setFrequency(task.frequency);
-    setDueWeekday(String(task.dueWeekday ?? 1));
-    setDueDayOfMonth(String(task.dueDayOfMonth ?? 30));
+    setTitle(responsibility.title);
+    setDescription(responsibility.description ?? "");
+    setInstructions(responsibility.instructions ?? "");
+    setDepartmentId(responsibility.departmentId);
+    setAssignedTo(responsibility.assignedTo ?? "none");
     setRemovedImageIds([]);
     pendingImages.forEach((i) => URL.revokeObjectURL(i.preview));
     setPendingImages([]);
@@ -149,27 +139,18 @@ export function RecurringTaskDetail({
       alert("El título es obligatorio");
       return;
     }
-    if (frequency !== task.frequency) {
-      const ok = confirm(
-        "Cambiar la frecuencia reiniciará el historial de completado de esta tarea. ¿Continuar?"
-      );
-      if (!ok) return;
-    }
     setSaving(true);
     try {
       const imageKeys =
         pendingImages.length > 0
           ? await uploadImages(pendingImages.map((i) => i.file))
           : undefined;
-      await updateRecurringTask(task.id, {
+      await updateOngoingResponsibility(responsibility.id, {
         title: title.trim(),
         description: description.trim() || undefined,
         instructions: instructions.trim() || undefined,
         departmentId,
         assignedTo: assignedTo === "none" ? null : assignedTo,
-        frequency,
-        dueWeekday: frequency === "weekly" ? Number(dueWeekday) : null,
-        dueDayOfMonth: frequency === "monthly" ? Number(dueDayOfMonth) : null,
         imageKeys,
         removedImageIds: removedImageIds.length > 0 ? removedImageIds : undefined,
       });
@@ -185,13 +166,31 @@ export function RecurringTaskDetail({
     }
   }
 
+  function handleToggleActive() {
+    const next = !isActive;
+    setIsActive(next);
+    startToggleActive(async () => {
+      try {
+        await toggleOngoingActive(responsibility.id, next);
+        router.refresh();
+      } catch (err) {
+        setIsActive(!next);
+        alert(err instanceof Error ? err.message : "Failed to update status");
+      }
+    });
+  }
+
   async function handleDelete() {
-    if (!confirm(`Delete recurring task "${task.title}"? This removes its history.`)) {
+    if (
+      !confirm(
+        `Delete responsibility "${responsibility.title}"? This removes its history.`
+      )
+    ) {
       return;
     }
     try {
-      await deleteRecurringTask(task.id);
-      router.push("/responsibilities?tab=recurring");
+      await deleteOngoingResponsibility(responsibility.id);
+      router.push("/responsibilities?tab=ongoing");
       router.refresh();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete");
@@ -206,12 +205,12 @@ export function RecurringTaskDetail({
           variant="ghost"
           className="w-fit gap-2 px-2 text-muted-foreground"
         >
-          <Link href={`/responsibilities?tab=recurring&dept=${task.departmentId}`}>
+          <Link href={`/responsibilities?tab=ongoing&dept=${responsibility.departmentId}`}>
             <ArrowLeft className="h-4 w-4" />
             Back
           </Link>
         </Button>
-        {task.canManage && !editing && (
+        {responsibility.canManage && !editing && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -233,26 +232,49 @@ export function RecurringTaskDetail({
       <Card>
         <CardHeader>
           {editing ? (
-            <CardTitle>Edit recurring task</CardTitle>
+            <CardTitle>Edit responsibility</CardTitle>
           ) : (
             <>
-              <CardTitle>{task.title}</CardTitle>
+              <CardTitle>{responsibility.title}</CardTitle>
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {task.departmentName && (
-                  <Badge variant="secondary">{task.departmentName}</Badge>
+                {responsibility.departmentName && (
+                  <Badge variant="secondary">{responsibility.departmentName}</Badge>
                 )}
-                <Badge variant="outline" className="gap-1">
-                  <Repeat className="h-3 w-3" />
-                  {FREQUENCY_LABELS[task.frequency]}
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "gap-1",
+                    isActive
+                      ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400"
+                      : "border-muted-foreground/40 text-muted-foreground"
+                  )}
+                >
+                  <CircleDot className="h-3 w-3" />
+                  {isActive ? "Active" : "Inactive"}
                 </Badge>
-                <span className="text-sm text-muted-foreground">
-                  {describeRecurrence(task.frequency, task.dueWeekday, task.dueDayOfMonth)}
-                </span>
-                {task.assigneeName && (
+                {responsibility.assigneeName && (
                   <Badge variant="outline" className="gap-1">
                     <User className="h-3 w-3" />
-                    {task.assigneeName}
+                    {responsibility.assigneeName}
                   </Badge>
+                )}
+                {responsibility.canToggle && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1.5 px-2 text-xs text-muted-foreground"
+                    onClick={handleToggleActive}
+                    disabled={togglingActive}
+                  >
+                    {togglingActive ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : isActive ? (
+                      <Pause className="h-3.5 w-3.5" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    {isActive ? "Mark inactive" : "Mark active"}
+                  </Button>
                 )}
               </div>
             </>
@@ -287,11 +309,11 @@ export function RecurringTaskDetail({
                   id="instructions"
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="Step-by-step instructions on how to complete this task..."
+                  placeholder="Guidelines or standards for this responsibility..."
                   rows={5}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional. Steps or guidelines to complete this task.
+                  Optional. Steps or guidelines for this responsibility.
                 </p>
 
                 {(visibleImages.length > 0 || pendingImages.length > 0) && (
@@ -385,7 +407,7 @@ export function RecurringTaskDetail({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Responsible</Label>
+                  <Label>Owner</Label>
                   <Select value={assignedTo} onValueChange={setAssignedTo}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a person..." />
@@ -400,68 +422,7 @@ export function RecurringTaskDetail({
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Frequency *</Label>
-                  <Select
-                    value={frequency}
-                    onValueChange={(v) => setFrequency(v as RecurrenceFrequency)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FREQUENCIES.map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {FREQUENCY_LABELS[f]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
-
-              {frequency === "weekly" && (
-                <div className="space-y-2">
-                  <Label>Deadline weekday</Label>
-                  <Select value={dueWeekday} onValueChange={setDueWeekday}>
-                    <SelectTrigger className="w-full sm:w-[280px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {WEEKDAY_LABELS.map((label, i) => (
-                        <SelectItem key={i} value={String(i)}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {frequency === "monthly" && (
-                <div className="space-y-2">
-                  <Label>Deadline day of month</Label>
-                  <Select value={dueDayOfMonth} onValueChange={setDueDayOfMonth}>
-                    <SelectTrigger className="w-full sm:w-[280px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                        <SelectItem key={d} value={String(d)}>
-                          Day {d}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {frequency !== task.frequency && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Changing the frequency will reset this task&apos;s completion history.
-                </p>
-              )}
 
               <div className="flex gap-2 pt-2">
                 <Button onClick={handleSave} disabled={saving}>
@@ -492,25 +453,27 @@ export function RecurringTaskDetail({
             </>
           ) : (
             <>
-              {task.description ? (
-                <p className="whitespace-pre-wrap text-sm">{task.description}</p>
+              {responsibility.description ? (
+                <p className="whitespace-pre-wrap text-sm">
+                  {responsibility.description}
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground">No description.</p>
               )}
               <div className="rounded-lg border bg-muted/30 p-4">
                 <p className="mb-2 text-sm font-semibold">Instructions</p>
-                {task.instructions ? (
+                {responsibility.instructions ? (
                   <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                    {task.instructions}
+                    {responsibility.instructions}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
                     No instructions provided.
                   </p>
                 )}
-                {task.images.length > 0 && (
+                {responsibility.images.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {task.images.map((img) => (
+                    {responsibility.images.map((img) => (
                       <Dialog key={img.id}>
                         <DialogTrigger asChild>
                           <button
@@ -542,8 +505,8 @@ export function RecurringTaskDetail({
                 )}
               </div>
               <div className="text-xs text-muted-foreground">
-                Created by {task.creatorName ?? "Unknown"} ·{" "}
-                {new Date(task.createdAt).toLocaleDateString("en-US", {
+                Created by {responsibility.creatorName ?? "Unknown"} ·{" "}
+                {new Date(responsibility.createdAt).toLocaleDateString("en-US", {
                   day: "numeric",
                   month: "long",
                   year: "numeric",
@@ -555,25 +518,14 @@ export function RecurringTaskDetail({
       </Card>
 
       {!editing && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Tracking</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RecurringOccurrences task={task} currentUserName={currentUserName} />
-          </CardContent>
-        </Card>
-      )}
-
-      {!editing && (
         <TaskDiscussion
-          taskId={task.id}
+          taskId={responsibility.id}
           currentUserId={currentUserId}
           isAdmin={isAdmin}
           comments={comments}
           activity={activity}
-          onAddComment={addRecurringTaskComment}
-          onDeleteComment={deleteRecurringTaskComment}
+          onAddComment={addOngoingResponsibilityComment}
+          onDeleteComment={deleteOngoingResponsibilityComment}
           onUploadImages={uploadImages}
         />
       )}
