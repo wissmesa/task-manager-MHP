@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { LogOut, Shield, ListChecks, Repeat } from "lucide-react";
+import { LogOut, Shield, ListChecks, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -40,16 +40,18 @@ export function NavBar({ userName, userEmail }: NavBarProps) {
               <span className="hidden sm:inline">Tasks</span>
             </Link>
             <Link
-              href="/recurring"
+              href="/responsibilities"
               className={cn(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-                pathname === "/recurring" || pathname.startsWith("/recurring/")
+                pathname === "/responsibilities" ||
+                  pathname.startsWith("/responsibilities/") ||
+                  pathname.startsWith("/recurring")
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground"
               )}
             >
-              <Repeat className="h-4 w-4" />
-              <span className="hidden sm:inline">Recurring</span>
+              <ClipboardList className="h-4 w-4" />
+              <span className="hidden sm:inline">Responsibilities</span>
             </Link>
           </nav>
         </div>

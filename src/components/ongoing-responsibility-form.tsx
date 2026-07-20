@@ -20,15 +20,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { ImagePlus, Loader2, Repeat, X } from "lucide-react";
-import { createRecurringTask } from "@/lib/recurring-actions";
+import { ImagePlus, Loader2, ClipboardList, X } from "lucide-react";
+import { createOngoingResponsibility } from "@/lib/ongoing-actions";
 import { uploadImages } from "@/lib/upload-images";
-import {
-  FREQUENCIES,
-  FREQUENCY_LABELS,
-  WEEKDAY_LABELS,
-  type RecurrenceFrequency,
-} from "@/lib/recurrence";
 
 interface Department {
   id: string;
@@ -36,12 +30,15 @@ interface Department {
   bossId: string | null;
 }
 
-interface RecurringTaskFormProps {
+interface OngoingResponsibilityFormProps {
   departments: Department[];
   membersMap: Record<string, { id: string; fullName: string }[]>;
 }
 
-export function RecurringTaskForm({ departments, membersMap }: RecurringTaskFormProps) {
+export function OngoingResponsibilityForm({
+  departments,
+  membersMap,
+}: OngoingResponsibilityFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState("");
@@ -49,9 +46,6 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
   const [instructions, setInstructions] = useState("");
   const [departmentId, setDepartmentId] = useState("none");
   const [assignedTo, setAssignedTo] = useState("none");
-  const [frequency, setFrequency] = useState<RecurrenceFrequency>("weekly");
-  const [dueWeekday, setDueWeekday] = useState("1"); // Monday
-  const [dueDayOfMonth, setDueDayOfMonth] = useState("30");
   const [pendingImages, setPendingImages] = useState<
     { file: File; preview: string }[]
   >([]);
@@ -99,21 +93,18 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
         pendingImages.length > 0
           ? await uploadImages(pendingImages.map((i) => i.file))
           : undefined;
-      await createRecurringTask({
+      await createOngoingResponsibility({
         title: title.trim(),
         description: description.trim() || undefined,
         instructions: instructions.trim() || undefined,
         departmentId,
         assignedTo,
-        frequency,
-        dueWeekday: frequency === "weekly" ? Number(dueWeekday) : null,
-        dueDayOfMonth: frequency === "monthly" ? Number(dueDayOfMonth) : null,
         imageKeys,
       });
-      router.push("/responsibilities?tab=recurring");
+      router.push("/responsibilities?tab=ongoing");
       router.refresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to create recurring task");
+      alert(err instanceof Error ? err.message : "Failed to create responsibility");
       setLoading(false);
     }
   }
@@ -121,9 +112,9 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New Recurring Task</CardTitle>
+        <CardTitle>New Ongoing Responsibility</CardTitle>
         <CardDescription>
-          Ongoing task tracked per department with a completion check for each period.
+          A standing duty owned permanently by a person, with no repeat schedule.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -134,7 +125,7 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
               id="title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Send weekly report"
+              placeholder="e.g. Make sure all computers are under one main user"
               required
               maxLength={255}
             />
@@ -146,7 +137,7 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What needs to be done each period..."
+              placeholder="What this standing duty involves..."
               rows={4}
             />
           </div>
@@ -157,11 +148,11 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
               id="instructions"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Step-by-step instructions on how to complete this task..."
+              placeholder="Guidelines or standards for keeping this duty in good shape..."
               rows={5}
             />
             <p className="text-xs text-muted-foreground">
-              Optional. Steps or guidelines to complete this task.
+              Optional. Steps or guidelines for this responsibility.
             </p>
 
             {pendingImages.length > 0 && (
@@ -232,93 +223,32 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
             </div>
 
             <div className="space-y-2">
-              <Label>Frequency *</Label>
+              <Label>Owner *</Label>
               <Select
-                value={frequency}
-                onValueChange={(v) => setFrequency(v as RecurrenceFrequency)}
+                value={assignedTo}
+                onValueChange={setAssignedTo}
+                disabled={departmentId === "none"}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select a person..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {FREQUENCIES.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {FREQUENCY_LABELS[f]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Responsible *</Label>
-            <Select
-              value={assignedTo}
-              onValueChange={setAssignedTo}
-              disabled={departmentId === "none"}
-            >
-              <SelectTrigger className="w-full sm:w-[280px]">
-                <SelectValue placeholder="Select a person..." />
-              </SelectTrigger>
-              <SelectContent>
-                {members.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {departmentId === "none"
-                ? "Select a department first."
-                : members.length === 0
-                  ? "This department has no members yet."
-                  : "Person responsible for keeping this task on track."}
-            </p>
-          </div>
-
-          {frequency === "weekly" && (
-            <div className="space-y-2">
-              <Label>Deadline weekday</Label>
-              <Select value={dueWeekday} onValueChange={setDueWeekday}>
-                <SelectTrigger className="w-full sm:w-[280px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {WEEKDAY_LABELS.map((label, i) => (
-                    <SelectItem key={i} value={String(i)}>
-                      {label}
+                  {members.map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.fullName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Must be done by this day each week.
+                {departmentId === "none"
+                  ? "Select a department first."
+                  : members.length === 0
+                    ? "This department has no members yet."
+                    : "Person permanently responsible for this duty."}
               </p>
             </div>
-          )}
-
-          {frequency === "monthly" && (
-            <div className="space-y-2">
-              <Label>Deadline day of month</Label>
-              <Select value={dueDayOfMonth} onValueChange={setDueDayOfMonth}>
-                <SelectTrigger className="w-full sm:w-[280px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                    <SelectItem key={d} value={String(d)}>
-                      Day {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Must be done before this day each month (clamped to the last day for short months).
-              </p>
-            </div>
-          )}
+          </div>
 
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={loading}>
@@ -329,8 +259,8 @@ export function RecurringTaskForm({ departments, membersMap }: RecurringTaskForm
                 </>
               ) : (
                 <>
-                  <Repeat className="mr-2 h-4 w-4" />
-                  Create Recurring Task
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Create Responsibility
                 </>
               )}
             </Button>

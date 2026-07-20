@@ -395,6 +395,85 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS tm_recurring_comment_images_comment_idx ON tm_recurring_comment_images(comment_id);
   `;
 
+  console.log("Creating tm_ongoing_responsibilities table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_ongoing_responsibilities (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      instructions TEXT,
+      department_id VARCHAR NOT NULL REFERENCES tm_departments(id),
+      created_by VARCHAR NOT NULL REFERENCES users(id),
+      assigned_to VARCHAR REFERENCES users(id),
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_ongoing_responsibilities_dept_idx ON tm_ongoing_responsibilities(department_id);
+  `;
+
+  console.log("Creating tm_ongoing_responsibility_activity table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_ongoing_responsibility_activity (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      responsibility_id VARCHAR NOT NULL REFERENCES tm_ongoing_responsibilities(id) ON DELETE CASCADE,
+      user_id VARCHAR NOT NULL REFERENCES users(id),
+      action VARCHAR NOT NULL,
+      field VARCHAR,
+      old_value TEXT,
+      new_value TEXT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_ongoing_activity_resp_idx ON tm_ongoing_responsibility_activity(responsibility_id);
+  `;
+
+  console.log("Creating tm_ongoing_responsibility_comments table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_ongoing_responsibility_comments (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      responsibility_id VARCHAR NOT NULL REFERENCES tm_ongoing_responsibilities(id) ON DELETE CASCADE,
+      user_id VARCHAR NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_ongoing_comments_resp_idx ON tm_ongoing_responsibility_comments(responsibility_id);
+  `;
+
+  console.log("Creating tm_ongoing_responsibility_images table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_ongoing_responsibility_images (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      responsibility_id VARCHAR NOT NULL REFERENCES tm_ongoing_responsibilities(id) ON DELETE CASCADE,
+      image_url VARCHAR NOT NULL,
+      original_name VARCHAR NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_ongoing_resp_images_idx ON tm_ongoing_responsibility_images(responsibility_id);
+  `;
+
+  console.log("Creating tm_ongoing_comment_images table...");
+  await sql`
+    CREATE TABLE IF NOT EXISTS tm_ongoing_comment_images (
+      id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+      comment_id VARCHAR NOT NULL REFERENCES tm_ongoing_responsibility_comments(id) ON DELETE CASCADE,
+      image_url VARCHAR NOT NULL,
+      original_name VARCHAR NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+  `;
+  await sql`
+    CREATE INDEX IF NOT EXISTS tm_ongoing_comment_images_idx ON tm_ongoing_comment_images(comment_id);
+  `;
+
   console.log("Migration complete!");
 }
 

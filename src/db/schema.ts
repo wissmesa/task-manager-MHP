@@ -312,6 +312,95 @@ export const recurringTaskCompletions = pgTable("tm_recurring_task_completions",
   completedAt: timestamp("completed_at").defaultNow().notNull(),
 });
 
+// ── Ongoing responsibilities ─────────────────────────────────────────────────
+// Standing duties owned permanently by a person, with no repeat schedule.
+
+export const ongoingResponsibilities = pgTable("tm_ongoing_responsibilities", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  instructions: text("instructions"),
+  departmentId: varchar("department_id")
+    .notNull()
+    .references(() => departments.id),
+  createdBy: varchar("created_by")
+    .notNull()
+    .references(() => users.id),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const ongoingResponsibilityActivity = pgTable(
+  "tm_ongoing_responsibility_activity",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    responsibilityId: varchar("responsibility_id")
+      .notNull()
+      .references(() => ongoingResponsibilities.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id),
+    action: varchar("action").notNull(),
+    field: varchar("field"),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  }
+);
+
+export const ongoingResponsibilityComments = pgTable(
+  "tm_ongoing_responsibility_comments",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    responsibilityId: varchar("responsibility_id")
+      .notNull()
+      .references(() => ongoingResponsibilities.id, { onDelete: "cascade" }),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  }
+);
+
+// Images attached to an ongoing responsibility's instructions.
+export const ongoingResponsibilityImages = pgTable(
+  "tm_ongoing_responsibility_images",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    responsibilityId: varchar("responsibility_id")
+      .notNull()
+      .references(() => ongoingResponsibilities.id, { onDelete: "cascade" }),
+    imageUrl: varchar("image_url").notNull(),
+    originalName: varchar("original_name").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  }
+);
+
+// Images attached to an ongoing responsibility comment.
+export const ongoingCommentImages = pgTable("tm_ongoing_comment_images", {
+  id: varchar("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  commentId: varchar("comment_id")
+    .notNull()
+    .references(() => ongoingResponsibilityComments.id, { onDelete: "cascade" }),
+  imageUrl: varchar("image_url").notNull(),
+  originalName: varchar("original_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ── Relations ───────────────────────────────────────────────────────────────
 
 export const tasksRelations = relations(tasks, ({ one, many }) => ({
@@ -437,5 +526,75 @@ export const recurringTaskCompletionsRelations = relations(
       fields: [recurringTaskCompletions.completedBy],
       references: [users.id],
     }),
+  })
+);
+
+export const ongoingResponsibilitiesRelations = relations(
+  ongoingResponsibilities,
+  ({ one, many }) => ({
+    creator: one(users, {
+      fields: [ongoingResponsibilities.createdBy],
+      references: [users.id],
+    }),
+    assignee: one(users, {
+      fields: [ongoingResponsibilities.assignedTo],
+      references: [users.id],
+    }),
+    department: one(departments, {
+      fields: [ongoingResponsibilities.departmentId],
+      references: [departments.id],
+    }),
+    activity: many(ongoingResponsibilityActivity),
+    comments: many(ongoingResponsibilityComments),
+    images: many(ongoingResponsibilityImages),
+  })
+);
+
+export const ongoingResponsibilityImagesRelations = relations(
+  ongoingResponsibilityImages,
+  ({ one }) => ({
+    responsibility: one(ongoingResponsibilities, {
+      fields: [ongoingResponsibilityImages.responsibilityId],
+      references: [ongoingResponsibilities.id],
+    }),
+  })
+);
+
+export const ongoingCommentImagesRelations = relations(
+  ongoingCommentImages,
+  ({ one }) => ({
+    comment: one(ongoingResponsibilityComments, {
+      fields: [ongoingCommentImages.commentId],
+      references: [ongoingResponsibilityComments.id],
+    }),
+  })
+);
+
+export const ongoingResponsibilityActivityRelations = relations(
+  ongoingResponsibilityActivity,
+  ({ one }) => ({
+    responsibility: one(ongoingResponsibilities, {
+      fields: [ongoingResponsibilityActivity.responsibilityId],
+      references: [ongoingResponsibilities.id],
+    }),
+    user: one(users, {
+      fields: [ongoingResponsibilityActivity.userId],
+      references: [users.id],
+    }),
+  })
+);
+
+export const ongoingResponsibilityCommentsRelations = relations(
+  ongoingResponsibilityComments,
+  ({ one, many }) => ({
+    responsibility: one(ongoingResponsibilities, {
+      fields: [ongoingResponsibilityComments.responsibilityId],
+      references: [ongoingResponsibilities.id],
+    }),
+    user: one(users, {
+      fields: [ongoingResponsibilityComments.userId],
+      references: [users.id],
+    }),
+    images: many(ongoingCommentImages),
   })
 );

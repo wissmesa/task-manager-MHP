@@ -55,7 +55,7 @@ function recurringTaskUrl(id: string): string {
   const baseUrl =
     process.env.NEXTAUTH_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  return `${baseUrl}/recurring/${id}`;
+  return `${baseUrl}/responsibilities/recurring/${id}`;
 }
 
 /** Notify the assigned user that a recurring task was assigned to them. */
@@ -574,8 +574,8 @@ export async function updateRecurringTask(
     });
   }
 
-  revalidatePath("/recurring");
-  revalidatePath(`/recurring/${id}`);
+  revalidatePath("/responsibilities");
+  revalidatePath(`/responsibilities/recurring/${id}`);
 }
 
 export async function createRecurringTask(input: {
@@ -658,7 +658,7 @@ export async function createRecurringTask(input: {
     });
   }
 
-  revalidatePath("/recurring");
+  revalidatePath("/responsibilities");
   return row.id;
 }
 
@@ -702,7 +702,7 @@ export async function toggleRecurringCompletion(
       );
   }
 
-  revalidatePath("/recurring");
+  revalidatePath("/responsibilities");
 }
 
 export async function deleteRecurringTask(id: string): Promise<void> {
@@ -719,7 +719,7 @@ export async function deleteRecurringTask(id: string): Promise<void> {
   if (!allowed) throw new Error("You don't have permission to delete this task");
 
   await db.delete(recurringTasks).where(eq(recurringTasks.id, id));
-  revalidatePath("/recurring");
+  revalidatePath("/responsibilities");
 }
 
 // ── Comments & activity ──────────────────────────────────────────────────────
@@ -835,7 +835,7 @@ export async function addRecurringTaskComment(
     hasImages,
   });
 
-  revalidatePath(`/recurring/${recurringTaskId}`);
+  revalidatePath(`/responsibilities/recurring/${recurringTaskId}`);
 }
 
 /**
@@ -933,7 +933,7 @@ export async function deleteRecurringTaskComment(commentId: string): Promise<voi
     .delete(recurringTaskComments)
     .where(eq(recurringTaskComments.id, commentId));
 
-  revalidatePath(`/recurring/${comment.recurringTaskId}`);
+  revalidatePath(`/responsibilities/recurring/${comment.recurringTaskId}`);
 }
 
 export async function getRecurringTaskActivity(

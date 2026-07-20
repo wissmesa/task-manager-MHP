@@ -88,6 +88,7 @@ const ACTION_LABELS: Record<string, string> = {
   description_changed: "updated the description",
   instructions_changed: "updated the instructions",
   frequency_changed: "changed the frequency",
+  active_changed: "changed the active status",
   department_changed: "changed the department",
   approved: "approved the task",
   coordinator_approved: "approved the task (coordinator)",
