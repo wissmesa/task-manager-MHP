@@ -637,7 +637,7 @@ export function TaskTable({
               <SortableHead label="Effort" sortKey="effort" className="w-[7%]" />
               <SortableHead label="Value" sortKey="value" className="w-[6%]" />
               <SortableHead label="Category" sortKey="category" className="w-[9%]" />
-              <SortableHead label="Client/MHP" sortKey="clientScope" className="w-[6%]" />
+              <SortableHead label="Affects" sortKey="clientScope" className="w-[6%]" />
               <SortableHead label="Department" sortKey="department" className="w-[7%]" />
               <SortableHead label="Assignee" sortKey="assignee" className="w-[5%]" />
               <SortableHead label="Due" sortKey="due" className="w-[7%]" />

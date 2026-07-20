@@ -913,7 +913,7 @@ export function TaskDetail({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>Client / MHP</Label>
+                  <Label>Affects</Label>
                   <Select value={editClientScope} onValueChange={setEditClientScope}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select..." />

@@ -101,7 +101,7 @@ export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
   effort: "Effort",
   value: "Value",
   category: "Category",
-  client_scope: "Client/MHP",
+  client_scope: "Affects",
   department: "Department",
   assignee: "Assignee",
   due: "Due",
