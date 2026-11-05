@@ -28,6 +28,8 @@ import {
   type TaskPriority,
 } from "@/lib/task-priority";
 import { EFFORT_OPTIONS, VALUE_OPTIONS, CATEGORY_OPTIONS, CLIENT_SCOPE_OPTIONS } from "@/lib/task-attributes";
+import { readUploadError } from "@/lib/compress-image";
+import { uploadImages } from "@/lib/upload-images";
 
 interface Department {
   id: string;
@@ -134,7 +136,8 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
         formData.set("clientScope", clientScope);
       }
 
-      images.forEach((img) => formData.append("files", img.file));
+      const uploadedImages = await uploadImages(images.map((img) => img.file));
+      formData.set("images", JSON.stringify(uploadedImages));
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -142,8 +145,7 @@ export function TaskForm({ departments, currentUserId, subordinatesMap }: TaskFo
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to create task");
+        throw new Error(await readUploadError(res, "Failed to create task"));
       }
 
       router.push("/tasks");

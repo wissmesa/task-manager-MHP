@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { randomUUID } from "crypto";
-import path from "path";
 import { db } from "@/db";
 import { tasks, taskImages, departments, userDepartment, users, taskActivity } from "@/db/schema";
-import { buildS3Key, uploadToS3 } from "@/lib/s3";
+import { isUploadImageKey } from "@/lib/s3";
 import { sendTaskCreatedEmail } from "@/lib/mail";
 import { isTaskPriority } from "@/lib/task-priority";
 import { eq } from "drizzle-orm";
@@ -22,7 +20,25 @@ export async function POST(req: NextRequest) {
   const departmentId = formData.get("departmentId") as string | null;
   const assignedTo = formData.get("assignedTo") as string | null;
   const planningStageRaw = formData.get("planningStage") as string | null;
-  const files = formData.getAll("files") as File[];
+  // Images are uploaded straight to S3 by the browser (see uploadImages); only
+  // their keys come through here.
+  let images: { s3Key: string; originalName: string }[] = [];
+  try {
+    const parsed = JSON.parse((formData.get("images") as string | null) || "[]");
+    if (Array.isArray(parsed)) images = parsed;
+  } catch {
+    return NextResponse.json({ error: "Invalid images" }, { status: 400 });
+  }
+  if (
+    !images.every(
+      (img) =>
+        typeof img?.s3Key === "string" &&
+        typeof img?.originalName === "string" &&
+        isUploadImageKey(img.s3Key)
+    )
+  ) {
+    return NextResponse.json({ error: "Invalid images" }, { status: 400 });
+  }
 
   const validPlanningStages = ["draft", "brainstorming", "discussed"] as const;
   const planningStage = validPlanningStages.includes(
@@ -182,27 +198,14 @@ export async function POST(req: NextRequest) {
     newValue: "Task created",
   });
 
-  if (files.length > 0) {
-    const imageRecords: { taskId: string; imageUrl: string; originalName: string }[] = [];
-
-    for (const file of files) {
-      const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
-      const ext = path.extname(file.name) || ".png";
-      const filename = `${randomUUID()}${ext}`;
-      const s3Key = buildS3Key(task.id, filename);
-
-      await uploadToS3(s3Key, buffer, file.type || "image/png");
-
-      imageRecords.push({
+  if (images.length > 0) {
+    await db.insert(taskImages).values(
+      images.map((img) => ({
         taskId: task.id,
-        imageUrl: s3Key,
-        originalName: file.name,
-      });
-    }
-
-    await db.insert(taskImages).values(imageRecords);
+        imageUrl: img.s3Key,
+        originalName: img.originalName,
+      }))
+    );
   }
 
   const baseUrl = process.env.NEXTAUTH_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
