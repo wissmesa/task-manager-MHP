@@ -23,7 +23,9 @@ export async function uploadImages(
   });
 
   if (!res.ok) {
-    throw new Error(await readUploadError(res, "Failed to upload images"));
+    throw new Error(
+      await readUploadError(res, `Failed to prepare image upload (${res.status})`)
+    );
   }
 
   const { uploads } = (await res.json()) as {
@@ -37,8 +39,17 @@ export async function uploadImages(
         headers: { "Content-Type": compressed[i].type },
         body: compressed[i],
       }).catch(() => null); // network/CORS errors reject instead of returning a response
-      if (!putRes?.ok) {
-        throw new Error("Failed to upload images");
+      if (!putRes) {
+        throw new Error("Failed to upload images: storage blocked the request (CORS/network)");
+      }
+      if (!putRes.ok) {
+        // S3 answers with an XML error body, e.g. <Code>AccessDenied</Code>.
+        const xml = await putRes.text().catch(() => "");
+        const code = xml.match(/<Code>(.*?)<\/Code>/)?.[1];
+        const message = xml.match(/<Message>(.*?)<\/Message>/)?.[1];
+        throw new Error(
+          `Failed to upload images (S3 ${putRes.status}${code ? ` ${code}` : ""}${message ? `: ${message}` : ""})`
+        );
       }
     })
   );

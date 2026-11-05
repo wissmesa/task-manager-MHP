@@ -58,7 +58,16 @@ export async function POST(req: NextRequest) {
 
     const ext = path.extname(name).replace(/[^.a-zA-Z0-9]/g, "") || ".png";
     const s3Key = buildUploadImageKey(`${randomUUID()}${ext}`);
-    const uploadUrl = await getSignedUploadUrl(s3Key, type);
+    let uploadUrl: string;
+    try {
+      uploadUrl = await getSignedUploadUrl(s3Key, type);
+    } catch (err) {
+      console.error("Failed to presign upload URL", err);
+      return NextResponse.json(
+        { error: `Failed to prepare image upload: ${err instanceof Error ? err.message : "unknown error"}` },
+        { status: 500 }
+      );
+    }
 
     uploads.push({ uploadUrl, s3Key, originalName: name });
   }
