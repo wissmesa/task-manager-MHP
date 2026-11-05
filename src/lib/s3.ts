@@ -24,32 +24,18 @@ function getEnv() {
   return process.env.envionment || "development";
 }
 
-export function buildS3Key(taskId: string, filename: string) {
-  return `${getEnv()}/task-images/${taskId}/${filename}`;
-}
-
 /**
- * Key for images attached to recurring task instructions or comments.
- * These may be uploaded before the parent row exists (e.g. a new comment),
- * so the key is not tied to a specific parent id.
+ * Key for images uploaded directly from the browser (task, recurring task and
+ * responsibility instructions, and comments). These are uploaded before the
+ * parent row exists, so the key is not tied to a specific parent id.
  */
-export function buildRecurringImageKey(filename: string) {
-  return `${getEnv()}/recurring-images/${filename}`;
+export function buildUploadImageKey(filename: string) {
+  return `${getEnv()}/uploads/${filename}`;
 }
 
-export async function uploadToS3(
-  key: string,
-  body: Buffer,
-  contentType: string
-) {
-  await getS3().send(
-    new PutObjectCommand({
-      Bucket: getBucket(),
-      Key: key,
-      Body: body,
-      ContentType: contentType,
-    })
-  );
+/** True when the key was issued by buildUploadImageKey for this environment. */
+export function isUploadImageKey(key: string) {
+  return key.startsWith(`${getEnv()}/uploads/`) && !key.includes("..");
 }
 
 export async function getSignedImageUrl(key: string) {
@@ -58,4 +44,18 @@ export async function getSignedImageUrl(key: string) {
     Key: key,
   });
   return getSignedUrl(getS3(), command, { expiresIn: 3600 });
+}
+
+/**
+ * Presigned PUT URL so the browser can upload straight to S3, bypassing the
+ * ~4.5 MB request body limit of our serverless functions. The client must send
+ * the same Content-Type header it was signed with.
+ */
+export async function getSignedUploadUrl(key: string, contentType: string) {
+  const command = new PutObjectCommand({
+    Bucket: getBucket(),
+    Key: key,
+    ContentType: contentType,
+  });
+  return getSignedUrl(getS3(), command, { expiresIn: 300 });
 }
