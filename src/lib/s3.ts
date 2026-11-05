@@ -11,6 +11,9 @@ function getS3() {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
       },
+      // Without this the SDK signs presigned PUT URLs with the CRC32 of an
+      // empty body, so S3 rejects the browser's real upload as a bad digest.
+      requestChecksumCalculation: "WHEN_REQUIRED",
     });
   }
   return _s3;
